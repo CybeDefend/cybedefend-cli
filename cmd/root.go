@@ -54,7 +54,6 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(helpCmd)
 }
 
 func initConfig() {
