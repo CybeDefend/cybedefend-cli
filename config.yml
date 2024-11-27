@@ -1,0 +1,4 @@
+# config.yaml
+
+api_url: "http://localhost:3000"
+api_key: "YOUR_API_KEY_HERE"
