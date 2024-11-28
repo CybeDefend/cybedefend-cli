@@ -2,57 +2,86 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
-func (c *Client) StartScan(filePath string) (string, error) {
+type ScanResult struct {
+	Success           bool     `json:"success"`
+	ScanID            string   `json:"scanId"`
+	Message           string   `json:"message"`
+	DetectedLanguages []string `json:"detectedLanguages"`
+}
+
+func (c *Client) StartScan(projectID, filePath string) (*ScanResult, error) {
+	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer file.Close()
 
+	// Prepare the multipart form data
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", filePath)
+	part, err := writer.CreateFormFile("scan", filepath.Base(filePath))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	_, err = io.Copy(part, file)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = writer.Close()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/scan", c.APIURL), body)
+	// Build the URL with projectID
+	url := fmt.Sprintf("%s/project/%s/scan/start", c.APIURL, projectID)
+
+	// Create the HTTP request
+	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 
+	// Set headers
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("x-api-key", c.APIKey)
+
+	// Send the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := ioutil.ReadAll(resp.Body)
-		return "", fmt.Errorf("API error: %s", responseBody)
+	// Read the response body
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	// Assume the API returns JSON with a field "scan_id"
-	// For brevity, we'll just return a placeholder scan ID
-	return "placeholder-scan-id", nil
+	// Parse the JSON response
+	var result ScanResult
+	err = json.Unmarshal(responseBody, &result)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing response: %w", err)
+	}
+
+	// Check if the API call was successful
+	if !result.Success {
+		return nil, fmt.Errorf("%s", result.Message)
+	}
+
+	// Return the ScanResult
+	return &result, nil
 }

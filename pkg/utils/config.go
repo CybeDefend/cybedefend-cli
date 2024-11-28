@@ -9,8 +9,9 @@ import (
 )
 
 type Config struct {
-	APIURL string
-	APIKey string
+	APIURL    string
+	APIKey    string
+	ProjectID string
 }
 
 func LoadConfig() (*Config, error) {
@@ -38,8 +39,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	config := &Config{
-		APIURL: viper.GetString("api_url"),
-		APIKey: viper.GetString("api_key"),
+		APIURL:    viper.GetString("api_url"),
+		APIKey:    viper.GetString("api_key"),
+		ProjectID: viper.GetString("project_id"),
 	}
 
 	return config, nil
