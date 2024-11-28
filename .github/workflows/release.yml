@@ -1,0 +1,49 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+
+jobs:
+  build-and-release:
+    name: Build and Release Binaries
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Build Binaries
+      run: |
+        chmod +x scripts/build-all.sh
+        ./scripts/build-all.sh
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          Release notes for version ${{ github.ref_name }}.
+          - Built for multiple platforms
+          - Precompiled binaries included
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Assets
+      run: |
+        for file in dist/**/*; do
+          echo "Uploading $file"
+          gh release upload ${{ github.ref_name }} "$file"
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
