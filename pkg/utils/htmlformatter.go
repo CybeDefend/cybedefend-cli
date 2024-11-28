@@ -8,13 +8,14 @@ import (
 )
 
 type VulnerabilityReport struct {
-	ProjectName     string
-	ProjectID       string
-	Total           int
-	Page            int
-	TotalPages      int
-	Severity        []string
-	Vulnerabilities []Vulnerability
+	ProjectName       string
+	ProjectID         string
+	Total             int
+	Page              int
+	TotalPages        int
+	Severity          []string
+	Vulnerabilities   []Vulnerability
+	VulnerabilityType string
 }
 
 type Vulnerability struct {
@@ -58,6 +59,7 @@ const htmlTemplate = `
                 <h2 class="text-xl font-semibold text-purple-300">Project: {{ .ProjectName }}</h2>
                 <p>Project ID: <span class="font-mono">{{ .ProjectID }}</span></p>
                 <p>Total Vulnerabilities: <span class="font-bold text-purple-300">{{ .Total }}</span></p>
+				<p>Type of Vulnerabilities: <span class="font-bold text-purple-300">{{ .VulnerabilityType }}</span></p>
 				<p>Page: <span class="font-bold text-purple-300">{{ .Page }}</span> of <span class="font-bold text-purple-300">{{ .TotalPages }}</span></p>
             </div>
 

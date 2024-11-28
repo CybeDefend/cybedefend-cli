@@ -30,12 +30,13 @@ type Vulnerability struct {
 }
 
 type VulnerabilityDetails struct {
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Severity     string   `json:"severity"`
-	HowToPrevent string   `json:"howToPrevent"`
-	CWE          []string `json:"cwe"`
-	OWASP        []string `json:"owaspTop10"`
+	Name              string   `json:"name"`
+	Description       string   `json:"description"`
+	Severity          string   `json:"severity"`
+	HowToPrevent      string   `json:"howToPrevent"`
+	CWE               []string `json:"cwe"`
+	OWASP             []string `json:"owaspTop10"`
+	VulnerabilityType string   `json:"vulnerabilityType"`
 }
 
 // GetResults fetches the results for the specified project, result type, and page.

@@ -66,6 +66,11 @@ var resultsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		if resultType != "sast" && resultType != "iac" {
+			logger.Error("Invalid result type: %s. Use 'sast' or 'iac'.", resultType)
+			os.Exit(1)
+		}
+
 		logger.Info("Fetching results for project %s, type %s, page %d", projectIDResults, resultType, page)
 
 		// Create the client
@@ -136,13 +141,14 @@ func writeJSONOutput(results interface{}, filePath string) {
 func writeHTMLOutput(results *api.ScanResults, filePath string) {
 	// Map api.ScanResults to utils.VulnerabilityReport
 	report := &utils.VulnerabilityReport{
-		ProjectName:     results.ProjectName,
-		ProjectID:       results.ProjectID,
-		Total:           results.Total,
-		Page:            results.Page,
-		TotalPages:      results.TotalPages,
-		Severity:        results.Severity,
-		Vulnerabilities: mapVulnerabilities(results.Vulnerabilities),
+		ProjectName:       results.ProjectName,
+		ProjectID:         results.ProjectID,
+		Total:             results.Total,
+		Page:              results.Page,
+		TotalPages:        results.TotalPages,
+		Severity:          results.Severity,
+		Vulnerabilities:   mapVulnerabilities(results.Vulnerabilities),
+		VulnerabilityType: resultType,
 	}
 
 	// Generate the HTML report
