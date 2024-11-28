@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-colorable"
+	"github.com/spf13/viper"
 )
 
 // Log levels
@@ -14,6 +15,7 @@ const (
 	LevelWarn    = "WARN"
 	LevelError   = "ERROR"
 	LevelSuccess = "SUCCESS"
+	LevelDebug   = "DEBUG"
 )
 
 // ANSI escape codes for colors and formatting (Charm Log style)
@@ -23,6 +25,7 @@ var (
 	colorYellow   = "\033[33m" // For WARN: Yellow
 	colorLightRed = "\033[91m" // For ERROR: Light Red (less aggressive)
 	colorGreen    = "\033[32m" // For SUCCESS: Green
+	colorMagenta  = "\033[35m" // For DEBUG: Magenta
 	bold          = "\033[1m"  // Bold text
 	output        = colorable.NewColorableStdout()
 )
@@ -43,8 +46,11 @@ func getCurrentTime() string {
 func logMessage(level string, color string, format string, a ...interface{}) {
 	timestamp := getCurrentTime()
 	message := fmt.Sprintf(format, a...)
-	// Apply color only to the level part
-	fmt.Fprintf(output, "%s%s %s[%s]%s %s\n", timestamp, bold, color, level, colorReset, message)
+	if !viper.GetBool("ci") {
+		fmt.Fprintf(output, "%s%s %s[%s]%s %s\n", timestamp, bold, color, level, colorReset, message)
+	} else {
+		fmt.Fprintf(output, "%s [%s] %s\n", timestamp, level, message)
+	}
 }
 
 // Info logs an informational message in blue
@@ -65,4 +71,10 @@ func Error(format string, a ...interface{}) {
 // Success logs a success message in green
 func Success(format string, a ...interface{}) {
 	logMessage(LevelSuccess, colorGreen, format, a...)
+}
+func Debug(format string, a ...interface{}) {
+	//get debug level from env
+	if viper.GetBool("debug") {
+		logMessage(LevelDebug, colorMagenta, format, a...)
+	}
 }

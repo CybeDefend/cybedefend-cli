@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	scanDir   string
-	scanFile  string
-	projectID string
+	scanDir       string
+	scanFile      string
+	projectIDScan string
 )
 
 var scanCmd = &cobra.Command{
@@ -23,9 +23,9 @@ var scanCmd = &cobra.Command{
 		apiKey := viper.GetString("api_key")
 		apiURL := viper.GetString("api_url")
 
-		// Retrieve projectID from flag, environment variable, or config
-		if projectID == "" {
-			projectID = viper.GetString("project_id")
+		// Retrieve projectIDScan from flag, environment variable, or config
+		if projectIDScan == "" {
+			projectIDScan = viper.GetString("project_id")
 		}
 
 		if apiKey == "" {
@@ -33,7 +33,7 @@ var scanCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if projectID == "" {
+		if projectIDScan == "" {
 			logger.Error("Project ID is required. Use --project-id flag, set CYBEDEFEND_PROJECT_ID environment variable, or specify in config file.")
 			os.Exit(1)
 		}
@@ -62,7 +62,7 @@ var scanCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(apiURL, apiKey)
-		scanResult, err := client.StartScan(projectID, zipPath)
+		scanResult, err := client.StartScan(projectIDScan, zipPath)
 		if err != nil {
 			logger.Error("Error starting scan: %v", err)
 			os.Exit(1)
@@ -74,6 +74,7 @@ var scanCmd = &cobra.Command{
 			if err != nil {
 				logger.Error("Error removing temporary zip file: %v", err)
 			}
+			logger.Debug("Removed temporary zip file: %s", zipPath)
 		}
 
 		logger.Success("Scan started successfully. Scan ID: %s", scanResult.ScanID)
@@ -84,5 +85,5 @@ var scanCmd = &cobra.Command{
 func init() {
 	scanCmd.Flags().StringVarP(&scanDir, "dir", "d", "", "Directory to scan")
 	scanCmd.Flags().StringVarP(&scanFile, "file", "f", "", "Zip file to scan")
-	scanCmd.Flags().StringVar(&projectID, "project-id", "", "Project ID")
+	scanCmd.Flags().StringVar(&projectIDScan, "project-id", "", "Project ID")
 }

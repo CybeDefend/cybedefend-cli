@@ -13,6 +13,7 @@ type Config struct {
 	APIKey    string
 	ProjectID string
 	CI        bool
+	DEBUG     bool
 }
 
 func LoadConfig() (*Config, error) {
@@ -45,6 +46,7 @@ func LoadConfig() (*Config, error) {
 		APIKey:    viper.GetString("api_key"),
 		ProjectID: viper.GetString("project_id"),
 		CI:        viper.GetBool("ci"),
+		DEBUG:     viper.GetBool("debug"),
 	}
 
 	return config, nil

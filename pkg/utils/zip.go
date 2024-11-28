@@ -3,6 +3,7 @@ package utils
 import (
 	"archive/zip"
 	"crypto/rand"
+	"cybedefend-cli/pkg/logger"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,8 @@ func ZipDirectory(source string) (string, error) {
 		}
 		// If file exists, generate a new name
 	}
+
+	logger.Debug("Zipping directory %s to %s", source, zipFilePath)
 
 	zipFile, err := os.Create(zipFilePath)
 	if err != nil {

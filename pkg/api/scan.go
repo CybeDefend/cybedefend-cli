@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"cybedefend-cli/pkg/logger"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +47,8 @@ func (c *Client) StartScan(projectID, filePath string) (*ScanResult, error) {
 
 	// Build the URL with projectID
 	url := fmt.Sprintf("%s/project/%s/scan/start", c.APIURL, projectID)
+
+	logger.Debug("POST %s", url)
 
 	// Create the HTTP request
 	req, err := http.NewRequest("POST", url, body)

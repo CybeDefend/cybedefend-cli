@@ -58,13 +58,15 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().String("api-url", "https://api.cybedefend.com", "API URL")
 	rootCmd.PersistentFlags().String("api-key", "", "API Key")
-	rootCmd.PersistentFlags().String("ci", "false", "CI mode")
+	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
+	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.cybedefend/config.yaml) (optional)")
 
 	// Bind flags to Viper
 	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
 	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
+	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
