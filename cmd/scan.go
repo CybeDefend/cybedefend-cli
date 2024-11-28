@@ -47,12 +47,14 @@ var scanCmd = &cobra.Command{
 		}
 
 		if scanDir != "" {
+			logger.Info("Starting scan of directory: %s", scanDir)
 			zipPath, err = utils.ZipDirectory(scanDir)
 			if err != nil {
 				logger.Error("Error zipping directory: %v", err)
 				os.Exit(1)
 			}
 		} else if scanFile != "" {
+			logger.Info("Starting scan of a zip file directly: %s", scanFile)
 			zipPath = scanFile
 		} else {
 			logger.Error("Please provide a directory to scan using --dir or a zip file using --file.")
@@ -64,6 +66,14 @@ var scanCmd = &cobra.Command{
 		if err != nil {
 			logger.Error("Error starting scan: %v", err)
 			os.Exit(1)
+		}
+
+		if scanDir != "" {
+			// Remove the temporary zip file
+			err = os.Remove(zipPath)
+			if err != nil {
+				logger.Error("Error removing temporary zip file: %v", err)
+			}
 		}
 
 		logger.Success("Scan started successfully. Scan ID: %s", scanResult.ScanID)
