@@ -4,7 +4,7 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
-	"fmt"
+	"cybedefend-cli/pkg/logger"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,12 +23,12 @@ var resultsCmd = &cobra.Command{
 		apiURL := viper.GetString("api_url")
 
 		if apiKey == "" {
-			fmt.Println("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file.")
+			logger.Error("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file.")
 			os.Exit(1)
 		}
 
 		if scanID == "" {
-			fmt.Println("Please provide a scan ID using --scan-id.")
+			logger.Error("Please provide a scan ID using --scan-id.")
 			cmd.Help()
 			os.Exit(1)
 		}
@@ -36,11 +36,11 @@ var resultsCmd = &cobra.Command{
 		client := api.NewClient(apiURL, apiKey)
 		results, err := client.GetResults(scanID)
 		if err != nil {
-			fmt.Printf("Error getting results: %v\n", err)
+			logger.Error("Error getting results: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Results for Scan ID %s:\n%v\n", scanID, results)
+		logger.Success("Results for Scan ID %s:\n%v\n", scanID, results)
 	},
 }
 

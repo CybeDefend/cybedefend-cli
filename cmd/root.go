@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 
+	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
 
+	"github.com/mattn/go-colorable"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -36,8 +38,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		if isUsingConfigFile {
-			fmt.Println("Using config file:", viper.ConfigFileUsed())
-			fmt.Print("\n")
+			logger.Info("Using config file: %s", viper.ConfigFileUsed())
 		}
 
 		return nil
@@ -46,7 +47,7 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
@@ -98,6 +99,8 @@ func displayBanner() {
 	color := "\033[38;2;40;20;52m"
 	reset := "\033[0m"
 
+	output := colorable.NewColorableStdout()
+
 	logo := "                             00000000000                                      \n" +
 		"                           000000000000 00000000                              \n" +
 		"                         0000000000000 0000000000                             \n" +
@@ -121,5 +124,5 @@ func displayBanner() {
 		"	   \\____\\__, |_.__/ \\___|____/ \\___|_|  \\___|_| |_|\\__,_|        \n" +
 		"		|___/                                                     	 \n"
 
-	fmt.Println(color + "\n" + logo + reset)
+	fmt.Fprint(output, color+"\n"+logo+reset+"\n")
 }

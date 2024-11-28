@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
+	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,12 +29,12 @@ var scanCmd = &cobra.Command{
 		}
 
 		if apiKey == "" {
-			fmt.Println("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file.")
+			logger.Error("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file.")
 			os.Exit(1)
 		}
 
 		if projectID == "" {
-			fmt.Println("Project ID is required. Use --project-id flag, set CYBEDEFEND_PROJECT_ID environment variable, or specify in config file.")
+			logger.Error("Project ID is required. Use --project-id flag, set CYBEDEFEND_PROJECT_ID environment variable, or specify in config file.")
 			os.Exit(1)
 		}
 
@@ -42,32 +42,32 @@ var scanCmd = &cobra.Command{
 		var err error
 
 		if scanDir != "" && scanFile != "" {
-			fmt.Println("Please provide either a directory to scan using --dir or a zip file using --file, not both.")
+			logger.Error("Please provide either a directory to scan using --dir or a zip file using --file, not both.")
 			os.Exit(1)
 		}
 
 		if scanDir != "" {
 			zipPath, err = utils.ZipDirectory(scanDir)
 			if err != nil {
-				fmt.Printf("Error zipping directory: %v\n", err)
+				logger.Error("Error zipping directory: %v", err)
 				os.Exit(1)
 			}
 		} else if scanFile != "" {
 			zipPath = scanFile
 		} else {
-			fmt.Println("Please provide a directory to scan using --dir or a zip file using --file.")
+			logger.Error("Please provide a directory to scan using --dir or a zip file using --file.")
 			os.Exit(1)
 		}
 
 		client := api.NewClient(apiURL, apiKey)
 		scanResult, err := client.StartScan(projectID, zipPath)
 		if err != nil {
-			fmt.Printf("Error starting scan: %v\n", err)
+			logger.Error("Error starting scan: %v", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Scan started successfully. Scan ID: %s\n", scanResult.ScanID)
-		fmt.Printf("Detected Languages: %v\n", scanResult.DetectedLanguages)
+		logger.Success("Scan started successfully. Scan ID: %s", scanResult.ScanID)
+		logger.Info("Detected Languages: %v", scanResult.DetectedLanguages)
 	},
 }
 

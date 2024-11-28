@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"cybedefend-cli/pkg/logger"
 
 	"github.com/spf13/cobra"
 )
@@ -12,6 +12,6 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show the version of cybedefend",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("cybedefend version %s\n", Version)
+		logger.Info("CybeDefend CLI version %s", Version)
 	},
 }
