@@ -12,6 +12,7 @@ type Config struct {
 	APIURL    string
 	APIKey    string
 	ProjectID string
+	CI        bool
 }
 
 func LoadConfig() (*Config, error) {
@@ -23,6 +24,7 @@ func LoadConfig() (*Config, error) {
 
 	// Set default values
 	viper.SetDefault("api_url", "https://api.cybedefend.com")
+	viper.SetDefault("ci", false) // Default CI to false
 
 	// Read in environment variables that match
 	viper.SetEnvPrefix("CYBEDEFEND")
@@ -42,6 +44,7 @@ func LoadConfig() (*Config, error) {
 		APIURL:    viper.GetString("api_url"),
 		APIKey:    viper.GetString("api_key"),
 		ProjectID: viper.GetString("project_id"),
+		CI:        viper.GetBool("ci"),
 	}
 
 	return config, nil

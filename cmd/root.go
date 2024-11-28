@@ -13,14 +13,15 @@ import (
 )
 
 var (
-	cfgFile string
-	config  *utils.Config
+	cfgFile           string
+	config            *utils.Config
+	isUsingConfigFile bool
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "cybedefend",
 	Short: "CybeDefend CLI for interacting with the CybeDefend API",
-	Long:  `CybeDefend is a CLI tool to interact with the CybeDefend API.`,
+	Long:  `CybeDefend CLI is a CLI tool to interact with the CybeDefend API.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
 		var err error
@@ -28,6 +29,17 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		// Display the ASCII art banner if CI is false
+		if !config.CI {
+			displayBanner()
+		}
+
+		if isUsingConfigFile {
+			fmt.Println("Using config file:", viper.ConfigFileUsed())
+			fmt.Print("\n")
+		}
+
 		return nil
 	},
 }
@@ -43,13 +55,15 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cybedefend/config.yaml)")
-	rootCmd.PersistentFlags().String("api-url", "", "API URL")
+	rootCmd.PersistentFlags().String("api-url", "https://api.cybedefend.com", "API URL")
 	rootCmd.PersistentFlags().String("api-key", "", "API Key")
+	rootCmd.PersistentFlags().String("ci", "false", "CI mode")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.cybedefend/config.yaml) (optional)")
 
 	// Bind flags to Viper
 	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
 	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
+	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
 
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
@@ -74,7 +88,38 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-		fmt.Print("\n")
+		isUsingConfigFile = true
 	}
+}
+
+// displayBanner prints the ASCII art banner
+func displayBanner() {
+	// Define the ANSI color code for RGB(40,20,52)
+	color := "\033[38;2;40;20;52m"
+	reset := "\033[0m"
+
+	logo := "                             00000000000                                      \n" +
+		"                           000000000000 00000000                              \n" +
+		"                         0000000000000 0000000000                             \n" +
+		"                       0000000000000 00000000000000                           \n" +
+		"                     000000000      00000000000000000                         \n" +
+		"                   0000000000                 000000000                       \n" +
+		"                  0000000000        0000       0000000000                     \n" +
+		"                 00000000000      000000        0000000000                    \n" +
+		"                 00000000000      000000000     00000000000                   \n" +
+		"                 00000000000      00000000      00000000000                   \n" +
+		"                   0000000000       00000       00000000000                   \n" +
+		"                     000000000                 0000000000                     \n" +
+		"                       0000000000000          000000000                       \n" +
+		"                        000000000000        0000000000                        \n" +
+		"                          0000000000   0000000000000                          \n" +
+		"                            00000000  000000000000                            \n" +
+		"	    ____      _          ____        __                _           	 \n" +
+		"	   / ___|   _| |__   ___|  _ \\  ___ / _| ___ _ __   __| |         	 \n" +
+		"	  | |  | | | | '_ \\ / _ \\ | | |/ _ \\ |_ / _ \\ '_ \\ / _` |         \n" +
+		"	  | |__| |_| | |_) |  __/ |_| |  __/  _|  __/ | | | (_| |          	 \n" +
+		"	   \\____\\__, |_.__/ \\___|____/ \\___|_|  \\___|_| |_|\\__,_|        \n" +
+		"		|___/                                                     	 \n"
+
+	fmt.Println(color + "\n" + logo + reset)
 }
