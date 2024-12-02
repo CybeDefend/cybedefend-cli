@@ -30,18 +30,18 @@ jobs:
     - name: Import GPG Key
       env:
         GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
         echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-        echo "$GPG_PASSPHRASE" | gpg --batch --passphrase-fd 0 --list-secret-keys
-
+  
     - name: Sign Binaries
+      env:
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
       run: |
         for file in dist/*; do
           echo "Signing $file"
-          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --output "$file.sig" --detach-sign "$file"
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output "$file.sig" --detach-sign "$file"
         done
-
+  
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
