@@ -40,8 +40,8 @@ type VulnerabilityDetails struct {
 }
 
 // GetResults fetches the results for the specified project, result type, and page.
-func (c *Client) GetResults(projectID, resultType string, page int) (*ScanResults, error) {
-	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=%d&sort=currentSeverity&order=asc&pageSizeNumber=20&severity=low,high,medium,critical&status=to_verify,confirmed&priority=critical_urgent,urgent,normal,low,very_low", c.APIURL, projectID, resultType, page)
+func (c *Client) GetResults(projectID, resultType string, page, limit int) (*ScanResults, error) {
+	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=%d&sort=currentSeverity&order=asc&pageSizeNumber=%d&severity=low,high,medium,critical&status=to_verify,confirmed&priority=critical_urgent,urgent,normal,low,very_low", c.APIURL, projectID, resultType, page, limit)
 
 	logger.Debug("GET %s", url)
 

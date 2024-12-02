@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -20,6 +21,7 @@ var (
 	outputFormat     string // "json", "html", or "sarif"
 	outputFile       string // file name
 	outputPath       string // file path
+	allResults       bool   // fetch all results
 )
 
 var resultsCmd = &cobra.Command{
@@ -32,6 +34,7 @@ func init() {
 	resultsCmd.Flags().StringVar(&projectIDResults, "project-id", "", "Project ID")
 	resultsCmd.Flags().StringVarP(&resultType, "type", "t", "sast", "Result type (sast or iac)")
 	resultsCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number to fetch")
+	resultsCmd.Flags().BoolVarP(&allResults, "all", "a", false, "Fetch all results")
 	resultsCmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json, html, sarif)")
 	resultsCmd.Flags().StringVarP(&outputFile, "filename", "f", "results.json", "Output file name")
 	resultsCmd.Flags().StringVar(&outputPath, "filepath", ".", "Output file path")
@@ -47,11 +50,17 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	// Adjust output file extensions based on format
 	setOutputFileDefaults()
 
-	logger.Info("Fetching results for project %s, type %s, page %d", projectIDResults, resultType, page)
+	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
 
 	// Create the client and fetch results
 	client := api.NewClient(apiURL, apiKey)
-	results := fetchResults(client)
+
+	var results *api.ScanResults
+	if allResults {
+		results = fetchAllResults(client)
+	} else {
+		results = fetchResults(client, page)
+	}
 
 	// Output results in the specified format
 	outputResults(results)
@@ -76,7 +85,7 @@ func validateInputs(apiKey string) {
 		os.Exit(1)
 	}
 
-	if page < 1 {
+	if page < 1 && !allResults {
 		logger.Error("Invalid page number: %d. Must be greater than 0.", page)
 		os.Exit(1)
 	}
@@ -104,8 +113,8 @@ func setOutputFileDefaults() {
 	}
 }
 
-func fetchResults(client *api.Client) *api.ScanResults {
-	results, err := client.GetResults(projectIDResults, resultType, page)
+func fetchResults(client *api.Client, page int) *api.ScanResults {
+	results, err := client.GetResults(projectIDResults, resultType, page, 20)
 	if err != nil {
 		logger.Error("Error fetching results: %v", err)
 		os.Exit(1)
@@ -113,7 +122,7 @@ func fetchResults(client *api.Client) *api.ScanResults {
 
 	if page > results.TotalPages {
 		logger.Warn("Requested page %d exceeds total pages (%d). Fetching last page instead.", page, results.TotalPages)
-		results, err = client.GetResults(projectIDResults, resultType, results.TotalPages)
+		results, err = client.GetResults(projectIDResults, resultType, results.TotalPages, 20)
 		if err != nil {
 			logger.Error("Error fetching last page: %v", err)
 			os.Exit(1)
@@ -121,6 +130,42 @@ func fetchResults(client *api.Client) *api.ScanResults {
 	}
 
 	return results
+}
+
+func fetchAllResults(client *api.Client) *api.ScanResults {
+	allResults := &api.ScanResults{}
+	page := 1
+
+	projectName := ""
+
+	for {
+		logger.Info("Fetching page %d...", page)
+		results, err := client.GetResults(projectIDResults, resultType, page, 100)
+		if err != nil {
+			logger.Error("Error fetching page %d: %v", page, err)
+			os.Exit(1)
+		}
+		if projectName == "" {
+			projectName = results.ProjectName
+		}
+
+		allResults.Vulnerabilities = append(allResults.Vulnerabilities, results.Vulnerabilities...)
+
+		if allResults.Severity == nil {
+			allResults.Total = results.Total
+		}
+
+		if page >= results.TotalPages {
+			break
+		}
+		page++
+		time.Sleep(1 * time.Second)
+	}
+
+	allResults.ProjectID = projectIDResults
+	allResults.ProjectName = projectName
+	allResults.TotalPages = page
+	return allResults
 }
 
 func outputResults(results *api.ScanResults) {
