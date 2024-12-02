@@ -23,3 +23,5 @@ go.work
 dist/
 
 .DS_Store
+
+private-key.asc

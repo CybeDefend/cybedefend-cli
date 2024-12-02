@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build, Sign, and Release
 
 on:
   push:
@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build and Release Binaries
+  build-sign-release:
+    name: Build, Sign, and Release Binaries
     runs-on: ubuntu-latest
 
     steps:
@@ -27,6 +27,21 @@ jobs:
         chmod +x scripts/build-all.sh
         ./scripts/build-all.sh
 
+    - name: Import GPG Key
+      env:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: |
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        echo "$GPG_PASSPHRASE" | gpg --batch --passphrase-fd 0 --list-secret-keys
+
+    - name: Sign Binaries
+      run: |
+        for file in dist/*; do
+          echo "Signing $file"
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --output "$file.sig" --detach-sign "$file"
+        done
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -42,11 +57,13 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload Assets
+    - name: Upload Binaries and Signatures
       run: |
         for file in dist/*; do
-        echo "Uploading $file"
-        gh release upload ${{ github.ref_name }} "$file"
+          echo "Uploading $file"
+          gh release upload ${{ github.ref_name }} "$file"
+          echo "Uploading $file.sig"
+          gh release upload ${{ github.ref_name }} "$file.sig"
         done
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
