@@ -60,10 +60,16 @@ jobs:
     - name: Upload Binaries and Signatures
       run: |
         for file in dist/*; do
-          echo "Uploading $file"
-          gh release upload ${{ github.ref_name }} "$file"
-          echo "Uploading $file.sig"
-          gh release upload ${{ github.ref_name }} "$file.sig"
+          if [[ "$file" != *.sig ]]; then
+            echo "Uploading $file"
+            gh release upload ${{ github.ref_name }} "$file"
+          fi
+
+          sig_file="$file.sig"
+          if [[ -f "$sig_file" ]]; then
+            echo "Uploading $sig_file"
+            gh release upload ${{ github.ref_name }} "$sig_file"
+          fi
         done
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
