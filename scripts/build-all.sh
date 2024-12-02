@@ -14,14 +14,13 @@ mkdir -p "${OUTPUT_DIR}"
 for PLATFORM in "${PLATFORMS[@]}"; do
     GOOS=${PLATFORM%%/*}
     GOARCH=${PLATFORM##*/}
-    OUTPUT_NAME=${APP_NAME}
+    OUTPUT_NAME="${APP_NAME}-${GOOS}-${GOARCH}"
     if [ "${GOOS}" = "windows" ]; then
         OUTPUT_NAME+=".exe"
     fi
     echo "Building for ${GOOS}/${GOARCH}..."
-    BUILD_DIR="${OUTPUT_DIR}/${APP_NAME}-${GOOS}-${GOARCH}"
-    mkdir -p "${BUILD_DIR}"
-    env GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 go build -ldflags "-s -w" -o "${BUILD_DIR}/${OUTPUT_NAME}" .
+    BUILD_PATH="${OUTPUT_DIR}/${OUTPUT_NAME}"
+    env GOOS=${GOOS} GOARCH=${GOARCH} CGO_ENABLED=0 go build -ldflags "-s -w" -o "${BUILD_PATH}" .
 done
 
 echo "All builds completed successfully."
