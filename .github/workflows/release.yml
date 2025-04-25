@@ -7,10 +7,11 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build-sign-release:
-    name: Build, Sign, and Release Binaries
+    name: Build, Sign, Release Binaries and Publish Docker Image
     runs-on: ubuntu-latest
 
     steps:
@@ -41,7 +42,29 @@ jobs:
           echo "Signing $file"
           gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output "$file.sig" --detach-sign "$file"
         done
-  
+
+    - name: Login to GitHub Container Registry
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+    - name: Build and Push Docker Image
+      run: |
+        IMAGE_BASE=ghcr.io/${{ github.repository }}
+        VERSION=${{ github.ref_name }}
+    
+        # Build image
+        docker build -t $IMAGE_BASE:$VERSION .
+    
+        # Tag also as latest if it's a non-prerelease version
+        if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Also tagging as latest"
+          docker tag $IMAGE_BASE:$VERSION $IMAGE_BASE:latest
+          docker push $IMAGE_BASE:latest
+        fi
+    
+        # Push versioned tag
+        docker push $IMAGE_BASE:$VERSION
+
     - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -52,6 +75,7 @@ jobs:
           Release notes for version ${{ github.ref_name }}.
           - Built for multiple platforms
           - Precompiled binaries included
+          - Docker image available at ghcr.io/${{ github.repository }}:${{ github.ref_name }}
         draft: false
         prerelease: false
       env:
