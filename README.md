@@ -118,7 +118,7 @@ You can create a `config.yaml` file in one of the following locations:
 
 Example `config.yaml`:
 ```yaml
-api_url: "https://api.cybedefend.com"
+api_url: "https://api-preprod.cybedefend.com"
 api_key: "your-api-key"
 project_id: "your-project-id"
 ```

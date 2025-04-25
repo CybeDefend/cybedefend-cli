@@ -56,7 +56,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().String("api-url", "https://api.cybedefend.com", "API URL")
+	rootCmd.PersistentFlags().String("api-url", "https://api-preprod.cybedefend.com", "API URL")
 	rootCmd.PersistentFlags().String("api-key", "", "API Key")
 	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
 	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
