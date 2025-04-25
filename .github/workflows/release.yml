@@ -49,21 +49,20 @@ jobs:
 
     - name: Build and Push Docker Image
       run: |
-        IMAGE_BASE=ghcr.io/${{ github.repository }}
+        IMAGE_BASE=ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         VERSION=${{ github.ref_name }}
     
-        # Build image
+        echo "Building Docker image: $IMAGE_BASE:$VERSION"
+    
         docker build -t $IMAGE_BASE:$VERSION .
     
-        # Tag also as latest if it's a non-prerelease version
         if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           echo "Also tagging as latest"
           docker tag $IMAGE_BASE:$VERSION $IMAGE_BASE:latest
           docker push $IMAGE_BASE:latest
         fi
     
-        # Push versioned tag
-        docker push $IMAGE_BASE:$VERSION
+        docker push $IMAGE_BASE:$VERSION      
 
     - name: Create Release
       id: create_release
