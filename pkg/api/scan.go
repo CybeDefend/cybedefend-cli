@@ -73,6 +73,15 @@ func (c *Client) StartScan(projectID, filePath string) (*ScanResult, error) {
 		return nil, err
 	}
 
+	// Log HTTP status and response body
+	logger.Debug("HTTP Status: %d", resp.StatusCode)
+	logger.Debug("Response Body: %s", string(responseBody))
+
+	// Check for non-2XX status codes
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected status code: %d - response: %s", resp.StatusCode, string(responseBody))
+	}
+
 	// Parse the JSON response
 	var result ScanResult
 	err = json.Unmarshal(responseBody, &result)
