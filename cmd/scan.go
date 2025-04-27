@@ -139,8 +139,8 @@ func waitForScanToComplete(client *api.Client, projectID, scanID string, interva
 			return nil, err
 		}
 
-		logger.Info("Scan progress: %d%% - State: %s - Step: %s", 
-			scanStatus.Progress, 
+		logger.Info("Scan progress: %d%% - State: %s - Step: %s",
+			scanStatus.Progress,
 			scanStatus.State,
 			scanStatus.Step)
 
@@ -163,7 +163,7 @@ func waitForScanToComplete(client *api.Client, projectID, scanID string, interva
 func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSeverity string) bool {
 	// Define severities to check based on the minimum severity specified
 	var severitiesToCheck []string
-	
+
 	switch minSeverity {
 	case "low":
 		severitiesToCheck = []string{"low", "medium", "high", "critical"}
@@ -174,7 +174,7 @@ func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSever
 	case "critical":
 		severitiesToCheck = []string{"critical"}
 	}
-	
+
 	// Get vulnerabilities by severity
 	vulnerabilities, err := client.GetVulnerabilitiesBySeverity(projectID, "sast", severitiesToCheck)
 	if err != nil {
@@ -182,10 +182,10 @@ func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSever
 		// In case of error, assume there are vulnerabilities to be safe
 		return true
 	}
-	
+
 	// Count total vulnerabilities
 	totalVulnerabilities := 0
-	
+
 	// Log detailed information for each severity level
 	logger.Info("Vulnerability breakdown (excluding resolved or not_exploitable):")
 	for _, severity := range []string{"critical", "high", "medium", "low"} {
@@ -194,7 +194,7 @@ func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSever
 			logger.Info(" - %s: %d", strings.ToUpper(severity), count)
 		}
 	}
-	
+
 	if totalVulnerabilities > 0 {
 		logger.Info("Found %d total vulnerabilities at or above %s severity", totalVulnerabilities, strings.ToUpper(minSeverity))
 		return true
@@ -208,14 +208,14 @@ func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSever
 func showVulnerabilitySummary(client *api.Client, projectID string) {
 	// Check all severity levels
 	severitiesToCheck := []string{"critical", "high", "medium", "low"}
-	
+
 	// Get vulnerabilities by severity
 	vulnerabilities, err := client.GetVulnerabilitiesBySeverity(projectID, "sast", severitiesToCheck)
 	if err != nil {
 		logger.Error("Error retrieving vulnerabilities: %v", err)
 		return
 	}
-	
+
 	// Log detailed information for each severity level
 	totalVulnerabilities := 0
 	logger.Info("Vulnerability breakdown (excluding resolved or not_exploitable):")
@@ -227,7 +227,7 @@ func showVulnerabilitySummary(client *api.Client, projectID string) {
 			}
 		}
 	}
-	
+
 	if totalVulnerabilities > 0 {
 		logger.Info("Found %d total vulnerabilities", totalVulnerabilities)
 	} else {

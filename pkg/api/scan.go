@@ -31,22 +31,22 @@ func (s *ScanResult) GetScanID() string {
 
 // ScanStatus represents the status of a scan
 type ScanStatus struct {
-	ID                  string             `json:"id"`
-	Name                string             `json:"name"`
-	State               string             `json:"state"`
-	Language            []string           `json:"language"`
-	ProjectID           string             `json:"projectId"`
-	Private             bool               `json:"private"`
-	InitializerUserID   string             `json:"initializerUserId"`
-	CreateAt            string             `json:"createAt"`
-	UpdatedAt           string             `json:"updatedAt"`
-	ScanType            string             `json:"scanType"`
-	StartTime           string             `json:"startTime"`
-	EndTime             string             `json:"endTime"`
-	Containers          []ScanContainer    `json:"containers"`
-	Progress            int                `json:"progress"`
-	Step                string             `json:"step"`
-	VulnerabilityDetected int              `json:"vulnerabilityDetected"`
+	ID                    string          `json:"id"`
+	Name                  string          `json:"name"`
+	State                 string          `json:"state"`
+	Language              []string        `json:"language"`
+	ProjectID             string          `json:"projectId"`
+	Private               bool            `json:"private"`
+	InitializerUserID     string          `json:"initializerUserId"`
+	CreateAt              string          `json:"createAt"`
+	UpdatedAt             string          `json:"updatedAt"`
+	ScanType              string          `json:"scanType"`
+	StartTime             string          `json:"startTime"`
+	EndTime               string          `json:"endTime"`
+	Containers            []ScanContainer `json:"containers"`
+	Progress              int             `json:"progress"`
+	Step                  string          `json:"step"`
+	VulnerabilityDetected int             `json:"vulnerabilityDetected"`
 }
 
 // ScanContainer represents a container used in the scan
@@ -201,15 +201,15 @@ func (c *Client) GetScanStatus(projectID, scanID string) (*ScanStatus, error) {
 func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severities []string) (map[string]int, error) {
 	// Build the URL with query parameters
 	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=1&sort=currentSeverity&order=asc", c.APIURL, projectID, scanType)
-	
+
 	// Add severity parameters
 	for _, severity := range severities {
 		url = fmt.Sprintf("%s&severity[]=%s", url, severity)
 	}
-	
+
 	// Add the status parameters - we only want vulnerabilities that are not resolved or not_exploitable
 	url = fmt.Sprintf("%s&status[]=to_verify&status[]=confirmed", url)
-	
+
 	// Add the priority parameters
 	url = fmt.Sprintf("%s&priority[]=critical_urgent&priority[]=urgent&priority[]=normal&priority[]=low&priority[]=very_low", url)
 
