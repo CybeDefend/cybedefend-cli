@@ -158,6 +158,10 @@ cybedefend scan [flags]
 - `--dir, -d`: Directory to scan. The directory will be zipped before uploading.
 - `--file, -f`: A pre-zipped file to scan. (Cannot be used with `--dir`.)
 - `--project-id`: Project ID for the scan. If not provided, the value from the configuration or environment variables will be used.
+- `--wait, -w`: Wait for the scan to complete before exiting. (Default: `true`)
+- `--interval`: Interval in seconds between scan status checks when waiting for completion. (Default: `5`)
+- `--break-on-fail`: Exit with error code if scan fails. Only applies when waiting for scan completion. (Default: `false`)
+- `--break-on-severity`: Exit with error code if vulnerabilities of specified severity or above are found. Possible values: `critical`, `high`, `medium`, `low`. Only applies when waiting for scan completion.
 - `--ci`: Enables CI/CD-friendly output. Disables colors, ASCII art, and additional formatting for plain text output.
 
 #### Examples
@@ -175,6 +179,31 @@ cybedefend scan [flags]
 3. Use CI/CD-friendly mode:
    ```bash
    cybedefend scan --dir ./my-project --ci
+   ```
+
+4. Start a scan and wait for its completion:
+   ```bash
+   cybedefend scan --dir ./my-project --wait
+   ```
+
+5. Start a scan, wait for completion and make the build fail if the scan fails:
+   ```bash
+   cybedefend scan --dir ./my-project --wait --break-on-fail
+   ```
+
+6. Start a scan, wait for completion and make the build fail if critical vulnerabilities are detected:
+   ```bash
+   cybedefend scan --dir ./my-project --wait --break-on-severity critical
+   ```
+
+7. Start a scan, wait for completion and make the build fail if medium or higher vulnerabilities are detected:
+   ```bash
+   cybedefend scan --dir ./my-project --wait --break-on-severity medium
+   ```
+
+8. Change the interval for checking scan status to 10 seconds:
+   ```bash
+   cybedefend scan --dir ./my-project --wait --interval 10
    ```
 
 ---
