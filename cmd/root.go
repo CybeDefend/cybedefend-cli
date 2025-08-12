@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
@@ -18,6 +19,7 @@ var (
 	cfgFile           string
 	config            *utils.Config
 	isUsingConfigFile bool
+	region            string
 )
 
 var rootCmd = &cobra.Command{
@@ -56,17 +58,19 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().String("api-url", "https://api-preprod.cybedefend.com", "API URL")
+	rootCmd.PersistentFlags().String("api-url", "https://api-us.cybedefend.com", "API URL")
 	rootCmd.PersistentFlags().String("api-key", "", "API Key")
 	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
 	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.cybedefend/config.yaml) (optional)")
+	rootCmd.PersistentFlags().StringVar(&region, "region", "us", "Platform region to use: us or eu (ignored if --api-url is provided)")
 
 	// Bind flags to Viper
 	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
 	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	viper.BindPFlag("region", rootCmd.PersistentFlags().Lookup("region"))
 
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
@@ -92,6 +96,23 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		isUsingConfigFile = true
+	}
+
+	// Derive API URL from region unless explicitly overridden by flag, env, or config file
+	// api-url flag has priority over region; env CYBEDEFEND_API_URL and config api_url also have priority
+	apiURLFlag := rootCmd.PersistentFlags().Lookup("api-url")
+	_, apiURLEnvSet := os.LookupEnv("CYBEDEFEND_API_URL")
+	apiURLInConfig := viper.InConfig("api_url")
+	if !(apiURLFlag != nil && apiURLFlag.Changed) && !apiURLEnvSet && !apiURLInConfig {
+		r := strings.ToLower(viper.GetString("region"))
+		var derived string
+		switch r {
+		case "eu":
+			derived = "https://api-eu.cybedefend.com"
+		default:
+			derived = "https://api-us.cybedefend.com"
+		}
+		viper.Set("api_url", derived)
 	}
 }
 

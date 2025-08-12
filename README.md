@@ -118,9 +118,11 @@ You can create a `config.yaml` file in one of the following locations:
 
 Example `config.yaml`:
 ```yaml
-api_url: "https://api-preprod.cybedefend.com"
+api_url: "https://api-us.cybedefend.com" # default if not overridden
 api_key: "your-api-key"
 project_id: "your-project-id"
+# Optional: choose region (us/eu). If set, api_url will be derived unless overridden by flag/env.
+# region: "eu"
 ```
 
 ### Environment Variables
@@ -128,6 +130,7 @@ project_id: "your-project-id"
 The CLI also supports environment variables:
 
 - `CYBEDEFEND_API_URL`: API base URL.
+- `CYBEDEFEND_REGION`: Platform region (`us` or `eu`). Ignored if `CYBEDEFEND_API_URL` is set.
 - `CYBEDEFEND_API_KEY`: API key for authentication.
 - `CYBEDEFEND_PROJECT_ID`: Default project ID.
 
@@ -135,7 +138,8 @@ The CLI also supports environment variables:
 
 You can override configurations using flags:
 
-- `--api-url`: API base URL.
+- `--region`: Platform region to use: `us` (default) or `eu`. If set, it selects `https://api-us.cybedefend.com` or `https://api-eu.cybedefend.com`.
+- `--api-url`: API base URL (manual override; takes precedence over `--region`).
 - `--api-key`: API key.
 - `--project-id`: Project ID.
 
@@ -181,27 +185,37 @@ cybedefend scan [flags]
    cybedefend scan --dir ./my-project --ci
    ```
 
-4. Start a scan and wait for its completion:
+4. Select the EU platform region:
+   ```bash
+   cybedefend scan --dir ./my-project --region eu
+   ```
+
+5. Manually override the API URL (takes precedence over region):
+   ```bash
+   cybedefend scan --dir ./my-project --api-url https://api-eu.cybedefend.com
+   ```
+
+6. Start a scan and wait for its completion:
    ```bash
    cybedefend scan --dir ./my-project --wait
    ```
 
-5. Start a scan, wait for completion and make the build fail if the scan fails:
+7. Start a scan, wait for completion and make the build fail if the scan fails:
    ```bash
    cybedefend scan --dir ./my-project --wait --break-on-fail
    ```
 
-6. Start a scan, wait for completion and make the build fail if critical vulnerabilities are detected:
+8. Start a scan, wait for completion and make the build fail if critical vulnerabilities are detected:
    ```bash
    cybedefend scan --dir ./my-project --wait --break-on-severity critical
    ```
 
-7. Start a scan, wait for completion and make the build fail if medium or higher vulnerabilities are detected:
+9. Start a scan, wait for completion and make the build fail if medium or higher vulnerabilities are detected:
    ```bash
    cybedefend scan --dir ./my-project --wait --break-on-severity medium
    ```
 
-8. Change the interval for checking scan status to 10 seconds:
+10. Change the interval for checking scan status to 10 seconds:
    ```bash
    cybedefend scan --dir ./my-project --wait --interval 10
    ```
