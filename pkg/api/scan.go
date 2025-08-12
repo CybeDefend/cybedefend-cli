@@ -1,33 +1,23 @@
 package api
 
 import (
-	"bytes"
 	"cybedefend-cli/pkg/logger"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
-type ScanResult struct {
-	Success           bool     `json:"success"`
-	ScanID            string   `json:"scanId"`
-	Message           string   `json:"message"`
-	DetectedLanguages []string `json:"detectedLanguages"`
+// StartScanResponse represents the response from the scan start endpoint
+type StartScanResponse struct {
+	URL    string `json:"url"`
+	ScanID string `json:"scanId"`
 }
 
-// GetScanID returns the scan ID from either the ScanID field or the Message field
-func (s *ScanResult) GetScanID() string {
-	if s.ScanID != "" {
-		return s.ScanID
-	}
-	// If ScanID is empty, use Message field which now contains the scan ID
-	return s.Message
-}
+// GetScanID returns the scan ID
+func (s *StartScanResponse) GetScanID() string { return s.ScanID }
 
 // ScanStatus represents the status of a scan
 type ScanStatus struct {
@@ -75,83 +65,102 @@ func (s *ScanStatus) IsFailed() bool {
 	return s.State == "failed"
 }
 
-func (c *Client) StartScan(projectID, filePath string) (*ScanResult, error) {
-	// Open the file
-	file, err := os.Open(filePath)
+// StartScan initiates a scan, uploads the file to the provided pre-signed URL, and returns the scan ID.
+func (c *Client) StartScan(projectID, filePath string) (*StartScanResponse, error) {
+	// Step 1: call start endpoint to get upload URL and scanId
+	startURL := fmt.Sprintf("%s/project/%s/scan/start", c.APIURL, projectID)
+	logger.Debug("POST %s", startURL)
+
+	req, err := http.NewRequest("POST", startURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-
-	// Prepare the multipart form data
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("scan", filepath.Base(filePath))
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return nil, err
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	// Build the URL with projectID
-	url := fmt.Sprintf("%s/project/%s/scan/start", c.APIURL, projectID)
-
-	logger.Debug("POST %s", url)
-
-	// Create the HTTP request
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("x-api-key", c.APIKey)
 
-	// Send the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Log HTTP status and response body
 	logger.Debug("HTTP Status: %d", resp.StatusCode)
 	logger.Debug("Response Body: %s", string(responseBody))
 
-	// Check for non-2XX status codes
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("unexpected status code: %d - response: %s", resp.StatusCode, string(responseBody))
 	}
 
-	// Parse the JSON response
-	var result ScanResult
-	err = json.Unmarshal(responseBody, &result)
+	var startResp StartScanResponse
+	if err := json.Unmarshal(responseBody, &startResp); err != nil {
+		return nil, fmt.Errorf("error parsing start response: %w", err)
+	}
+	if startResp.URL == "" || startResp.ScanID == "" {
+		return nil, fmt.Errorf("invalid start response: missing url or scanId")
+	}
+
+	// Step 2: upload the zip file via PUT to the pre-signed URL
+	if err := uploadFileToURL(startResp.URL, filePath); err != nil {
+		return nil, fmt.Errorf("upload failed: %w", err)
+	}
+
+	return &startResp, nil
+}
+
+// uploadFileToURL uploads the file at filePath to the given pre-signed URL using PUT.
+func uploadFileToURL(uploadURL, filePath string) error {
+	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing response: %w", err)
+		return err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return err
 	}
 
-	// Check if the API call was successful
-	if !result.Success {
-		return nil, fmt.Errorf("%s", result.Message)
+	req, err := http.NewRequest("PUT", uploadURL, file)
+	if err != nil {
+		return err
 	}
 
-	// Return the ScanResult
-	return &result, nil
+	// Set headers only for Google Cloud Storage signed URLs
+	if strings.Contains(uploadURL, "storage.googleapis.com") {
+		req.Header.Set("Content-Type", "application/zip")
+		req.Header.Set("x-goog-if-generation-match", "0")
+		req.Header.Set("x-goog-content-length-range", "0,5368709120")
+	}
+
+	// Ensure content length is set when possible
+	req.ContentLength = stat.Size()
+
+	// Avoid leaking signed query params in logs
+	loggedURL := uploadURL
+	if q := strings.Index(loggedURL, "?"); q != -1 {
+		loggedURL = loggedURL[:q] + "?(signed)"
+	}
+	logger.Debug("PUT %s (size: %d bytes)", loggedURL, stat.Size())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	logger.Debug("Upload HTTP Status: %d", resp.StatusCode)
+	if len(body) > 0 {
+		logger.Debug("Upload Response Body: %s", string(body))
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("upload unexpected status code: %d - response: %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 // GetScanStatus retrieves the status of a scan

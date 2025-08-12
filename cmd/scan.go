@@ -99,7 +99,6 @@ var scanCmd = &cobra.Command{
 
 		scanID := scanResult.GetScanID()
 		logger.Success("Scan started successfully. Scan ID: %s", scanID)
-		logger.Info("Detected Languages: %v", scanResult.DetectedLanguages)
 
 		if waitForComplete {
 			logger.Info("Waiting for scan to complete...")
