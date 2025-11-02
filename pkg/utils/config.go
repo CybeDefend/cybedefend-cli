@@ -8,6 +8,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+// API URL constants
+const (
+	APIURLUs = "https://api-us.cybedefend.com"
+	APIURLEu = "https://api-eu.cybedefend.com"
+)
+
 type Config struct {
 	APIURL    string
 	APIKey    string
@@ -24,7 +30,7 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath("/etc/cybedefend/")  // Optionally look for config in /etc/cybedefend/
 
 	// Set default values
-	viper.SetDefault("api_url", "https://api-us.cybedefend.com")
+	viper.SetDefault("api_url", APIURLUs)
 	viper.SetDefault("ci", false) // Default CI to false
 
 	// Read in environment variables that match

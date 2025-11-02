@@ -58,7 +58,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().String("api-url", "https://api-us.cybedefend.com", "API URL")
+	rootCmd.PersistentFlags().String("api-url", utils.APIURLUs, "API URL")
 	rootCmd.PersistentFlags().String("api-key", "", "API Key")
 	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
 	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
@@ -108,9 +108,9 @@ func initConfig() {
 		var derived string
 		switch r {
 		case "eu":
-			derived = "https://api-eu.cybedefend.com"
+			derived = utils.APIURLEu
 		default:
-			derived = "https://api-us.cybedefend.com"
+			derived = utils.APIURLUs
 		}
 		viper.Set("api_url", derived)
 	}

@@ -206,10 +206,9 @@ func (c *Client) GetScanStatus(projectID, scanID string) (*ScanStatus, error) {
 	return &result, nil
 }
 
-// GetVulnerabilitiesBySeverity returns the count of vulnerabilities for each severity
-func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severities []string) (map[string]int, error) {
-	// Build the URL with query parameters
-	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=1&sort=currentSeverity&order=asc", c.APIURL, projectID, scanType)
+// buildVulnerabilitiesURL constructs the URL for fetching vulnerabilities with query parameters
+func buildVulnerabilitiesURL(apiURL, projectID, scanType string, severities []string) string {
+	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=1&sort=currentSeverity&order=asc", apiURL, projectID, scanType)
 
 	// Add severity parameters
 	for _, severity := range severities {
@@ -221,6 +220,41 @@ func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severi
 
 	// Add the priority parameters
 	url = fmt.Sprintf("%s&priority[]=critical_urgent&priority[]=urgent&priority[]=normal&priority[]=low&priority[]=very_low", url)
+
+	return url
+}
+
+// countVulnerabilitiesBySeverity counts vulnerabilities by severity from the API response
+func countVulnerabilitiesBySeverity(result map[string]interface{}) map[string]int {
+	severityCount := make(map[string]int)
+	vulnerabilities, ok := result["vulnerabilities"].([]interface{})
+	if !ok {
+		return severityCount
+	}
+
+	for _, vuln := range vulnerabilities {
+		vulnMap, ok := vuln.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Only count vulnerabilities that are not resolved or not_exploitable
+		state, _ := vulnMap["currentState"].(string)
+		if state == "resolved" || state == "not_exploitable" {
+			continue
+		}
+
+		severity := strings.ToLower(vulnMap["currentSeverity"].(string))
+		severityCount[severity]++
+	}
+
+	return severityCount
+}
+
+// GetVulnerabilitiesBySeverity returns the count of vulnerabilities for each severity
+func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severities []string) (map[string]int, error) {
+	// Build the URL with query parameters
+	url := buildVulnerabilitiesURL(c.APIURL, projectID, scanType, severities)
 
 	logger.Debug("GET %s", url)
 
@@ -255,19 +289,7 @@ func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severi
 	}
 
 	// Count vulnerabilities by severity
-	severityCount := make(map[string]int)
-	if vulnerabilities, ok := result["vulnerabilities"].([]interface{}); ok {
-		for _, vuln := range vulnerabilities {
-			if vulnMap, ok := vuln.(map[string]interface{}); ok {
-				// Only count vulnerabilities that are not resolved or not_exploitable
-				state, _ := vulnMap["currentState"].(string)
-				if state != "resolved" && state != "not_exploitable" {
-					severity := strings.ToLower(vulnMap["currentSeverity"].(string))
-					severityCount[severity]++
-				}
-			}
-		}
-	}
+	severityCount := countVulnerabilitiesBySeverity(result)
 
 	return severityCount, nil
 }
