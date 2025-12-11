@@ -111,6 +111,30 @@ func (c *Client) StartScan(projectID, filePath string) (*StartScanResponse, erro
 	return &startResp, nil
 }
 
+// progressReader wraps an io.Reader and reports progress
+type progressReader struct {
+	reader      io.Reader
+	total       int64
+	current     int64
+	lastPercent int
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	pr.current += int64(n)
+
+	// Calculate percentage
+	percent := int(float64(pr.current) / float64(pr.total) * 100)
+
+	// Only log if percentage changed and is a multiple of 10 (or 100%)
+	if percent != pr.lastPercent && (percent%10 == 0 || percent == 100) {
+		logger.Info("Upload progress: %d%%", percent)
+		pr.lastPercent = percent
+	}
+
+	return n, err
+}
+
 // uploadFileToURL uploads the file at filePath to the given pre-signed URL using PUT.
 func uploadFileToURL(uploadURL, filePath string) error {
 	file, err := os.Open(filePath)
@@ -124,14 +148,33 @@ func uploadFileToURL(uploadURL, filePath string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("PUT", uploadURL, file)
+	// Avoid leaking signed query params in logs
+	loggedURL := uploadURL
+	if q := strings.Index(loggedURL, "?"); q != -1 {
+		loggedURL = loggedURL[:q] + "?(signed)"
+	}
+
+	logger.Info("Uploading file (%.2f MB)...", float64(stat.Size())/(1024*1024))
+	logger.Debug("PUT %s (size: %d bytes)", loggedURL, stat.Size())
+
+	// Create progress reader
+	progressR := &progressReader{
+		reader:      file,
+		total:       stat.Size(),
+		current:     0,
+		lastPercent: -1,
+	}
+
+	req, err := http.NewRequest("PUT", uploadURL, progressR)
 	if err != nil {
 		return err
 	}
 
-	// Set headers only for Google Cloud Storage signed URLs
+	// Set Content-Type for all uploads
+	req.Header.Set("Content-Type", "application/zip")
+
+	// Set additional headers for Google Cloud Storage signed URLs
 	if strings.Contains(uploadURL, "storage.googleapis.com") {
-		req.Header.Set("Content-Type", "application/zip")
 		req.Header.Set("x-goog-if-generation-match", "0")
 		req.Header.Set("x-goog-content-length-range", "0,5368709120")
 	}
@@ -139,12 +182,6 @@ func uploadFileToURL(uploadURL, filePath string) error {
 	// Ensure content length is set when possible
 	req.ContentLength = stat.Size()
 
-	// Avoid leaking signed query params in logs
-	loggedURL := uploadURL
-	if q := strings.Index(loggedURL, "?"); q != -1 {
-		loggedURL = loggedURL[:q] + "?(signed)"
-	}
-	logger.Debug("PUT %s (size: %d bytes)", loggedURL, stat.Size())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -160,6 +197,8 @@ func uploadFileToURL(uploadURL, filePath string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("upload unexpected status code: %d - response: %s", resp.StatusCode, string(body))
 	}
+
+	logger.Success("Upload completed successfully")
 	return nil
 }
 
