@@ -303,7 +303,11 @@ Generates a SARIF (Static Analysis Results Interchange Format) file, commonly us
 
 ## CI/CD Integration
 
-You can integrate the CLI into CI/CD pipelines to automate security scans. Here’s an example for GitHub Actions:
+You can integrate the CLI into CI/CD pipelines to automate security scans.
+
+### GitHub Actions
+
+Here's an example for GitHub Actions:
 
 ```yaml
 name: Security Scan
@@ -322,13 +326,60 @@ jobs:
 
       - name: Install CybeDefend CLI
         run: |
-          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.0/cybedefend-linux-amd64 -o cybedefend
+          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.6/cybedefend-linux-amd64 -o cybedefend
           chmod +x cybedefend
           sudo mv cybedefend /usr/local/bin/
 
       - name: Run security scan
-        run: cybedefend scan --dir ./ --ci --api-key ${{ secrets.CYBEDEFEND_API_KEY }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }}
+        run: cybedefend scan --dir ./ --ci --api-key ${{ secrets.CYBEDEFEND_API_KEY }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }} --region ${{ vars.CYBEDEFEND_REGION }}
 ```
+
+### GitLab CI
+
+Here's an example for GitLab CI:
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - security-scan
+
+variables:
+  CYBEDEFEND_CLI_VERSION: "v1.0.6"
+  CYBEDEFEND_CLI_BINARY: "cybedefend-linux-amd64"
+  CYBEDEFEND_REGION: "eu"  # or "us"
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+    - when: never
+
+security_scan:
+  stage: security-scan
+  image: alpine:3.23
+  before_script:
+    - apk add --no-cache curl ca-certificates
+  script:
+    - echo "Downloading CybeDefend CLI ${CYBEDEFEND_CLI_VERSION}"
+    - |
+      curl -fsSL "https://github.com/CybeDefend/cybedefend-cli/releases/download/${CYBEDEFEND_CLI_VERSION}/${CYBEDEFEND_CLI_BINARY}" \
+        -o /tmp/cybedefend
+    - chmod 0755 /tmp/cybedefend
+    - mv /tmp/cybedefend /usr/local/bin/cybedefend
+    - echo "Running CybeDefend security scan"
+    - >
+      cybedefend scan
+      --dir .
+      --ci
+      --api-key "${CYBEDEFEND_API_KEY}"
+      --project-id "${CYBEDEFEND_PROJECT_ID}"
+      --region "${CYBEDEFEND_REGION}"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_success
+```
+
+> **Note:** Store `CYBEDEFEND_API_KEY` and `CYBEDEFEND_PROJECT_ID` as protected CI/CD variables in your GitLab project settings.
 
 ---
 
