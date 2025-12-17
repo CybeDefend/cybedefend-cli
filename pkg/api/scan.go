@@ -277,14 +277,18 @@ func countVulnerabilitiesBySeverity(result map[string]interface{}) map[string]in
 			continue
 		}
 
-		// Only count vulnerabilities that are not resolved or not_exploitable
+		// Only count vulnerabilities that are not resolved or not_exploitable or ignored
 		state, _ := vulnMap["currentState"].(string)
-		if state == "resolved" || state == "not_exploitable" {
+		if state == "resolved" || state == "not_exploitable" || state == "ignored" {
 			continue
 		}
 
-		severity := strings.ToLower(vulnMap["currentSeverity"].(string))
-		severityCount[severity]++
+		// Safely get the severity, skip if not present or not a string
+		severity, ok := vulnMap["currentSeverity"].(string)
+		if !ok || severity == "" {
+			continue
+		}
+		severityCount[strings.ToLower(severity)]++
 	}
 
 	return severityCount
