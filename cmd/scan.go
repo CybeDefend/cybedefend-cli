@@ -17,6 +17,7 @@ var (
 	scanDir         string
 	scanFile        string
 	projectIDScan   string
+	scanBranch      string
 	waitForComplete bool
 	breakOnFail     bool
 	breakOnSeverity string
@@ -52,7 +53,7 @@ var scanCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(apiURL, apiKey)
-		scanID, err := executeScan(client, projectIDScan, zipPath)
+		scanID, err := executeScan(client, projectIDScan, zipPath, scanBranch)
 		if err != nil {
 			logger.Error("Error starting scan: %v", err)
 			os.Exit(1)
@@ -117,8 +118,8 @@ func validateBreakOnSeverity() error {
 }
 
 // executeScan starts the scan and handles cleanup of temporary files
-func executeScan(client *api.Client, projectID, zipPath string) (string, error) {
-	scanResult, err := client.StartScan(projectID, zipPath)
+func executeScan(client *api.Client, projectID, zipPath, branch string) (string, error) {
+	scanResult, err := client.StartScan(projectID, zipPath, branch)
 	if err != nil {
 		return "", err
 	}
@@ -284,6 +285,7 @@ func init() {
 	scanCmd.Flags().StringVarP(&scanDir, "dir", "d", "", "Directory to scan")
 	scanCmd.Flags().StringVarP(&scanFile, "file", "f", "", "Zip file to scan")
 	scanCmd.Flags().StringVar(&projectIDScan, "project-id", "", "Project ID")
+	scanCmd.Flags().StringVarP(&scanBranch, "branch", "b", "main", "Branch name for the scan (e.g., main, develop)")
 	scanCmd.Flags().BoolVarP(&waitForComplete, "wait", "w", true, "Wait for scan to complete")
 	scanCmd.Flags().BoolVar(&breakOnFail, "break-on-fail", false, "Exit with error code if scan fails")
 	scanCmd.Flags().StringVar(&breakOnSeverity, "break-on-severity", "", "Exit with error code if vulnerabilities of specified severity or above are found (critical, high, medium, low, none)")

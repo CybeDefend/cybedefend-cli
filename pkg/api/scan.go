@@ -65,17 +65,37 @@ func (s *ScanStatus) IsFailed() bool {
 	return s.State == "failed"
 }
 
+// StartScanRequest represents the request body for starting a scan
+type StartScanRequest struct {
+	Branch string `json:"branch,omitempty"`
+}
+
 // StartScan initiates a scan, uploads the file to the provided pre-signed URL, and returns the scan ID.
-func (c *Client) StartScan(projectID, filePath string) (*StartScanResponse, error) {
+func (c *Client) StartScan(projectID, filePath, branch string) (*StartScanResponse, error) {
 	// Step 1: call start endpoint to get upload URL and scanId
 	startURL := fmt.Sprintf("%s/project/%s/scan/start", c.APIURL, projectID)
 	logger.Debug("POST %s", startURL)
 
-	req, err := http.NewRequest("POST", startURL, nil)
+	// Prepare request body with branch if provided
+	var reqBody io.Reader
+	if branch != "" {
+		reqData := StartScanRequest{Branch: branch}
+		jsonData, err := json.Marshal(reqData)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling request body: %w", err)
+		}
+		reqBody = strings.NewReader(string(jsonData))
+		logger.Debug("Request Body: %s", string(jsonData))
+	}
+
+	req, err := http.NewRequest("POST", startURL, reqBody)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("x-api-key", c.APIKey)
+	if branch != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

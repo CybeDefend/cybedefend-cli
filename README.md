@@ -162,6 +162,7 @@ cybedefend scan [flags]
 - `--dir, -d`: Directory to scan. The directory will be zipped before uploading.
 - `--file, -f`: A pre-zipped file to scan. (Cannot be used with `--dir`.)
 - `--project-id`: Project ID for the scan. If not provided, the value from the configuration or environment variables will be used.
+- `--branch, -b`: Branch name for the scan (e.g., `main`, `develop`). Associates the scan with a specific Git branch.
 - `--wait, -w`: Wait for the scan to complete before exiting. (Default: `true`)
 - `--interval`: Interval in seconds between scan status checks when waiting for completion. (Default: `5`)
 - `--break-on-fail`: Exit with error code if scan fails. Only applies when waiting for scan completion. (Default: `false`)
@@ -219,6 +220,16 @@ cybedefend scan [flags]
    ```bash
    cybedefend scan --dir ./my-project --wait --interval 10
    ```
+
+11. Scan a directory with a specific branch:
+    ```bash
+    cybedefend scan --dir ./my-project --branch main
+    ```
+
+12. Scan with branch in CI/CD (using environment variable for branch name):
+    ```bash
+    cybedefend scan --dir ./ --ci --branch $GIT_BRANCH
+    ```
 
 ---
 
@@ -326,12 +337,12 @@ jobs:
 
       - name: Install CybeDefend CLI
         run: |
-          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.6/cybedefend-linux-amd64 -o cybedefend
+          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.7/cybedefend-linux-amd64 -o cybedefend
           chmod +x cybedefend
           sudo mv cybedefend /usr/local/bin/
 
       - name: Run security scan
-        run: cybedefend scan --dir ./ --ci --api-key ${{ secrets.CYBEDEFEND_API_KEY }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }} --region ${{ vars.CYBEDEFEND_REGION }}
+        run: cybedefend scan --dir ./ --ci --api-key ${{ secrets.CYBEDEFEND_API_KEY }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }} --region ${{ vars.CYBEDEFEND_REGION }} --branch ${{ github.ref_name }}
 ```
 
 ### GitLab CI
@@ -344,7 +355,7 @@ stages:
   - security-scan
 
 variables:
-  CYBEDEFEND_CLI_VERSION: "v1.0.6"
+  CYBEDEFEND_CLI_VERSION: "v1.0.7"
   CYBEDEFEND_CLI_BINARY: "cybedefend-linux-amd64"
   CYBEDEFEND_REGION: "eu"  # or "us"
 
@@ -374,6 +385,7 @@ security_scan:
       --api-key "${CYBEDEFEND_API_KEY}"
       --project-id "${CYBEDEFEND_PROJECT_ID}"
       --region "${CYBEDEFEND_REGION}"
+      --branch "${CI_COMMIT_BRANCH}"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       when: on_success
