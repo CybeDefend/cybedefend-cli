@@ -5,4 +5,4 @@ set -e
 
 echo "Running cybedefend..."
 
-go run main.go "$@"
+CGO_ENABLED=0 go run main.go "$@"

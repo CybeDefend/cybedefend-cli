@@ -14,14 +14,16 @@ import (
 )
 
 var (
-	scanDir         string
-	scanFile        string
-	projectIDScan   string
-	scanBranch      string
-	waitForComplete bool
-	breakOnFail     bool
-	breakOnSeverity string
-	scanInterval    int
+	scanDir            string
+	scanFile           string
+	projectIDScan      string
+	scanBranch         string
+	waitForComplete    bool
+	breakOnFail        bool
+	breakOnSeverity    string
+	scanInterval       int
+	enablePolicyCheck  bool
+	policyCheckTimeout int
 )
 
 var scanCmd = &cobra.Command{
@@ -150,7 +152,21 @@ func handleScanCompletion(client *api.Client, projectID, scanID string) {
 		os.Exit(1)
 	}
 
+	// Skip policy check if scan failed
+	if scanStatus.IsFailed() {
+		logger.Info("Scan failed - skipping policy evaluation")
+		return
+	}
+
 	handleBreakOnSeverity(client, projectID, scanStatus)
+
+	// Handle policy evaluation if enabled
+	if enablePolicyCheck {
+		exitCode := handlePolicyEvaluation(client, projectID, scanID)
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}
 }
 
 // handleBreakOnSeverity checks vulnerabilities and exits if threshold is exceeded
@@ -290,4 +306,196 @@ func init() {
 	scanCmd.Flags().BoolVar(&breakOnFail, "break-on-fail", false, "Exit with error code if scan fails")
 	scanCmd.Flags().StringVar(&breakOnSeverity, "break-on-severity", "", "Exit with error code if vulnerabilities of specified severity or above are found (critical, high, medium, low, none)")
 	scanCmd.Flags().IntVar(&scanInterval, "interval", 5, "Interval (in seconds) between scan status checks when waiting for completion")
+	scanCmd.Flags().BoolVar(&enablePolicyCheck, "policy-check", true, "Enable policy evaluation after scan")
+	scanCmd.Flags().IntVar(&policyCheckTimeout, "policy-timeout", 300, "Timeout in seconds for policy evaluation")
+}
+
+// handlePolicyEvaluation handles the policy evaluation flow after scan completion
+func handlePolicyEvaluation(client *api.Client, projectId, scanId string) int {
+	logger.Info("Checking policy evaluation status...")
+
+	// 1. Poll evaluation-status endpoint until COMPLETED or FAILED or timeout
+	evalStatus, err := waitForPolicyEvaluation(client, projectId, scanId, policyCheckTimeout)
+	if err != nil {
+		logger.Error("Policy evaluation error: %v", err)
+		return 1
+	}
+
+	if evalStatus.Status == "NOT_STARTED" {
+		logger.Info("No policies configured for this project")
+		return 0
+	}
+
+	if evalStatus.Status == "FAILED" {
+		logger.Error("Policy evaluation failed: %s", evalStatus.Message)
+		return 1
+	}
+
+	if !evalStatus.HasEvaluation {
+		logger.Info("No policy evaluation available")
+		return 0
+	}
+
+	// 2. Fetch all violations (handle pagination)
+	violations, err := client.GetAllViolations(projectId, scanId)
+	if err != nil {
+		logger.Error("Failed to fetch violations: %v", err)
+		return 1
+	}
+
+	if len(violations) == 0 {
+		logger.Success("✓ Policy check passed - No violations found")
+		return 0
+	}
+
+	// 3. Display violations and determine exit code
+	return displayViolationsAndGetExitCode(violations)
+}
+
+// waitForPolicyEvaluation polls the evaluation status until completed or timeout
+func waitForPolicyEvaluation(client *api.Client, projectId, scanId string, timeoutSec int) (*api.EvaluationStatus, error) {
+	startTime := time.Now()
+	pollInterval := 2 * time.Second
+
+	for {
+		elapsed := time.Since(startTime)
+		if elapsed > time.Duration(timeoutSec)*time.Second {
+			return nil, fmt.Errorf("policy evaluation timed out after %d seconds", timeoutSec)
+		}
+
+		status, err := client.GetEvaluationStatus(projectId, scanId)
+		if err != nil {
+			return nil, err
+		}
+
+		logger.Debug("Policy evaluation status: %s (progress: %d%%)", status.Status, status.Progress)
+
+		// Terminal states
+		if status.Status == "COMPLETED" || status.Status == "FAILED" || status.Status == "NOT_STARTED" {
+			return status, nil
+		}
+
+		// Show progress for long evaluations
+		if status.Status == "IN_PROGRESS" {
+			logger.Info("Policy evaluation in progress: %d%%", status.Progress)
+		}
+
+		time.Sleep(pollInterval)
+	}
+}
+
+// displayViolationsAndGetExitCode displays violations and returns appropriate exit code
+func displayViolationsAndGetExitCode(violations []api.PolicyViolation) int {
+	blockCount := 0
+	warnCount := 0
+	acknowledgedBlockCount := 0
+
+	// Group violations by action (acknowledged BLOCK violations don't block the build)
+	var blockViolations, warnViolations, acknowledgedViolations []api.PolicyViolation
+	for _, v := range violations {
+		if v.ActionTaken == "BLOCK" {
+			if v.Acknowledged {
+				acknowledgedViolations = append(acknowledgedViolations, v)
+				acknowledgedBlockCount++
+			} else {
+				blockViolations = append(blockViolations, v)
+				blockCount++
+			}
+		} else {
+			warnViolations = append(warnViolations, v)
+			warnCount++
+		}
+	}
+
+	// Display BLOCK violations (in red)
+	if len(blockViolations) > 0 {
+		logger.Error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		logger.Error("🚫 BLOCKING VIOLATIONS (%d)", blockCount)
+		logger.Error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		for _, v := range blockViolations {
+			displayViolation(v, true)
+		}
+	}
+
+	// Display acknowledged violations (in yellow - they don't block)
+	if len(acknowledgedViolations) > 0 {
+		logger.Warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		logger.Warn("✓ ACKNOWLEDGED VIOLATIONS (%d)", acknowledgedBlockCount)
+		logger.Warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		for _, v := range acknowledgedViolations {
+			displayAcknowledgedViolation(v)
+		}
+	}
+
+	// Display WARN violations (in yellow)
+	if len(warnViolations) > 0 {
+		logger.Warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		logger.Warn("⚠️  WARNING VIOLATIONS (%d)", warnCount)
+		logger.Warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		for _, v := range warnViolations {
+			displayViolation(v, false)
+		}
+	}
+
+	// Summary
+	logger.Info("")
+	logger.Info("Policy Evaluation Summary:")
+	logger.Info("  • Total violations: %d", len(violations))
+	if blockCount > 0 {
+		logger.Error("  • Blocking: %d", blockCount)
+	}
+	if acknowledgedBlockCount > 0 {
+		logger.Info("  • Acknowledged (not blocking): %d", acknowledgedBlockCount)
+	}
+	if warnCount > 0 {
+		logger.Warn("  • Warnings: %d", warnCount)
+	}
+
+	// Return exit code based on non-acknowledged BLOCK violations only
+	if blockCount > 0 {
+		logger.Error("")
+		logger.Error("❌ Build blocked due to %d policy violation(s)", blockCount)
+		return 1 // Exit code 1 = build fails
+	}
+
+	logger.Success("")
+	if acknowledgedBlockCount > 0 {
+		logger.Success("✓ Policy check passed (%d acknowledged, %d warning(s))", acknowledgedBlockCount, warnCount)
+	} else {
+		logger.Success("✓ Policy check passed (with %d warning(s))", warnCount)
+	}
+	return 0
+}
+
+// displayAcknowledgedViolation displays an acknowledged violation
+func displayAcknowledgedViolation(v api.PolicyViolation) {
+	prefix := "  "
+	description := v.Rule.Description
+	if description == "" {
+		description = fmt.Sprintf("%s %v", v.Rule.Type, v.Rule.Value)
+	}
+	
+	logger.Warn("%s• [%s] %s", prefix, v.Rule.Name, description)
+	logger.Warn("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
+	logger.Warn("%s  ✓ Acknowledged: %s", prefix, v.AcknowledgementReason)
+}
+
+// displayViolation displays a single violation
+func displayViolation(v api.PolicyViolation, isBlock bool) {
+	prefix := "  "
+	description := v.Rule.Description
+	if description == "" {
+		description = fmt.Sprintf("%s %v", v.Rule.Type, v.Rule.Value)
+	}
+	
+	if isBlock {
+		logger.Error("%s• [%s] %s", prefix, v.Rule.Name, description)
+		logger.Error("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
+	} else {
+		logger.Warn("%s• [%s] %s", prefix, v.Rule.Name, description)
+		logger.Warn("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
+		if v.Acknowledged {
+			logger.Warn("%s  ✓ Acknowledged: %s", prefix, v.AcknowledgementReason)
+		}
+	}
 }
