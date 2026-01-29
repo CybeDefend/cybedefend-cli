@@ -14,17 +14,18 @@ import (
 )
 
 var (
-	scanDir            string
-	scanFile           string
-	projectIDScan      string
-	scanBranch         string
-	waitForComplete    bool
-	breakOnFail        bool
-	breakOnSeverity    string
-	scanInterval       int
-	enablePolicyCheck  bool
-	policyCheckTimeout int
-	showPolicyVulns    bool
+	scanDir             string
+	scanFile            string
+	projectIDScan       string
+	scanBranch          string
+	waitForComplete     bool
+	breakOnFail         bool
+	breakOnSeverity     string
+	scanInterval        int
+	enablePolicyCheck   bool
+	policyCheckTimeout  int
+	showPolicyVulns     bool
+	showAllPolicyVulns  bool
 )
 
 var scanCmd = &cobra.Command{
@@ -317,6 +318,7 @@ func init() {
 	scanCmd.Flags().BoolVar(&enablePolicyCheck, "policy-check", true, "Enable policy evaluation after scan")
 	scanCmd.Flags().IntVar(&policyCheckTimeout, "policy-timeout", 300, "Timeout in seconds for policy evaluation")
 	scanCmd.Flags().BoolVar(&showPolicyVulns, "show-policy-vulns", true, "Show affected vulnerabilities in policy evaluation output")
+	scanCmd.Flags().BoolVar(&showAllPolicyVulns, "show-all-policy-vulns", false, "Show all affected vulnerabilities (no limit)")
 }
 
 // handlePolicyEvaluation handles the policy evaluation flow after scan completion
@@ -529,9 +531,12 @@ func displayAffectedVulnerabilities(v api.PolicyViolation, isBlock bool) {
 	appBaseURL := getAppBaseURL()
 	projectId := v.ProjectId
 
-	// Limit display to first 5 vulnerabilities to avoid clutter
-	maxDisplay := 5
+	// Determine max vulnerabilities to display
 	displayCount := len(v.AffectedVulnerabilities)
+	maxDisplay := 5
+	if showAllPolicyVulns {
+		maxDisplay = displayCount
+	}
 	if displayCount > maxDisplay {
 		displayCount = maxDisplay
 	}

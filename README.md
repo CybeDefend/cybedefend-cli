@@ -12,6 +12,7 @@ The **CybeDefend CLI** is a command-line interface tool for interacting with the
 
 - Start a new security scan by uploading files or directories.
 - Retrieve detailed scan results in multiple formats.
+- **Policy Evaluation & Break Build**: Automatically enforce security policies and break builds based on policy violations.
 - Cross-platform support: Linux, macOS, and Windows.
 - CI/CD-friendly mode with simplified, colorless output.
 - API key-based authentication.
@@ -121,8 +122,11 @@ Example `config.yaml`:
 api_url: "https://api-us.cybedefend.com" # default if not overridden
 api_key: "your-api-key"
 project_id: "your-project-id"
+branch: "main" # Optional: default branch for scans
 # Optional: choose region (us/eu). If set, api_url will be derived unless overridden by flag/env.
 # region: "eu"
+# Optional: custom app URL for vulnerability links (for self-hosted deployments)
+# app_url: "https://app.example.com"
 ```
 
 ### Environment Variables
@@ -167,6 +171,10 @@ cybedefend scan [flags]
 - `--interval`: Interval in seconds between scan status checks when waiting for completion. (Default: `5`)
 - `--break-on-fail`: Exit with error code if scan fails. Only applies when waiting for scan completion. (Default: `false`)
 - `--break-on-severity`: Exit with error code if vulnerabilities of specified severity or above are found. Possible values: `critical`, `high`, `medium`, `low`. Only applies when waiting for scan completion.
+- `--policy-check`: Enable policy evaluation after scan completion. (Default: `true`)
+- `--policy-timeout`: Timeout in seconds for policy evaluation. (Default: `300`)
+- `--show-policy-vulns`: Show affected vulnerabilities in policy evaluation output. (Default: `true`)
+- `--show-all-policy-vulns`: Show all affected vulnerabilities without limit. (Default: `false`, shows max 5 per violation)
 - `--ci`: Enables CI/CD-friendly output. Disables colors, ASCII art, and additional formatting for plain text output.
 
 #### Examples
@@ -231,6 +239,26 @@ cybedefend scan [flags]
     cybedefend scan --dir ./ --ci --branch $GIT_BRANCH
     ```
 
+13. Run scan with policy evaluation (enabled by default):
+    ```bash
+    cybedefend scan --dir ./my-project --ci
+    ```
+
+14. Disable policy evaluation:
+    ```bash
+    cybedefend scan --dir ./my-project --policy-check=false
+    ```
+
+15. Show all policy vulnerabilities (no limit):
+    ```bash
+    cybedefend scan --dir ./my-project --show-all-policy-vulns
+    ```
+
+16. Hide vulnerability details in policy output:
+    ```bash
+    cybedefend scan --dir ./my-project --show-policy-vulns=false
+    ```
+
 ---
 
 ### `results`
@@ -292,6 +320,62 @@ By default, the command fetches results in `json` format for the `sast` type and
 
 ---
 
+## Policy Evaluation & Break Build
+
+The CLI integrates with CybeDefend's Policy Evaluation system to enforce security policies and optionally break builds based on policy violations.
+
+### How It Works
+
+1. After a scan completes, the CLI automatically checks for policy violations
+2. The CLI polls the evaluation status until it completes (or times out)
+3. All violations are fetched and displayed, grouped by action type:
+   - **BLOCK**: Violations that will cause the CLI to exit with code 1
+   - **WARN**: Informational violations that won't affect the exit code
+   - **Acknowledged**: Violations that have been acknowledged in the platform (won't block)
+
+### Example Output
+
+```
+✓ Scan completed successfully
+ℹ Checking policy evaluation status...
+✓ Policy evaluation completed
+ℹ Policy violations found: 2 BLOCK, 1 WARN
+
+⛔ BLOCK Actions:
+  ✗ No Critical Vulnerabilities (BLOCK)
+    Affected: 3 vulnerabilities
+      → [CRITICAL] SQL Injection - src/api/users.ts (L45-48)
+        https://us.cybedefend.com/project/xxx/sast/issue/yyy
+
+⚠️ WARN Actions:
+  ⚠ Dependency Check (WARN)
+    Affected: 1 vulnerability
+
+✓ Acknowledged Violations (not blocking):
+  ⚠ No High Vulnerabilities (BLOCK)
+    ✓ Acknowledged: Risk accepted for legacy code
+```
+
+### Configuration
+
+Policy evaluation is enabled by default. You can customize its behavior:
+
+```bash
+# Disable policy evaluation
+cybedefend scan --dir ./my-project --policy-check=false
+
+# Increase timeout for large projects
+cybedefend scan --dir ./my-project --policy-timeout 600
+
+# Show all vulnerabilities per violation (default: max 5)
+cybedefend scan --dir ./my-project --show-all-policy-vulns
+
+# Hide vulnerability details
+cybedefend scan --dir ./my-project --show-policy-vulns=false
+```
+
+---
+
 ## CI/CD Mode (`--ci`)
 
 The `--ci` flag is available for both the `scan` and `results` commands. When enabled, the CLI suppresses colors, ASCII art, and other visual formatting, providing clean and minimal output suitable for CI/CD pipelines.
@@ -337,7 +421,7 @@ jobs:
 
       - name: Install CybeDefend CLI
         run: |
-          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.7/cybedefend-linux-amd64 -o cybedefend
+          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.9/cybedefend-linux-amd64 -o cybedefend
           chmod +x cybedefend
           sudo mv cybedefend /usr/local/bin/
 
@@ -355,7 +439,7 @@ stages:
   - security-scan
 
 variables:
-  CYBEDEFEND_CLI_VERSION: "v1.0.7"
+  CYBEDEFEND_CLI_VERSION: "v1.0.9"
   CYBEDEFEND_CLI_BINARY: "cybedefend-linux-amd64"
   CYBEDEFEND_REGION: "eu"  # or "us"
 
