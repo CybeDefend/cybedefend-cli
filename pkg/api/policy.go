@@ -21,30 +21,48 @@ type EvaluationStatus struct {
 
 // PolicyRule represents a rule within a policy violation
 type PolicyRule struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Type        string `json:"type"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Type        string      `json:"type"`
 	Value       interface{} `json:"value"`
-	Action      string `json:"action"`
-	Operator    string `json:"operator"`
+	Action      string      `json:"action"`
+	Operator    string      `json:"operator"`
+}
+
+// AffectedVulnerability represents a vulnerability affected by a policy violation
+type AffectedVulnerability struct {
+	ID                string   `json:"id"`
+	CWE               []string `json:"cwe,omitempty"`
+	Name              string   `json:"name"`
+	Branch            string   `json:"branch,omitempty"`
+	EndLine           int      `json:"endLine,omitempty"`
+	FilePath          string   `json:"filePath,omitempty"`
+	Severity          string   `json:"severity"`
+	CVSSScore         float64  `json:"cvssScore,omitempty"`
+	StartLine         int      `json:"startLine,omitempty"`
+	OwaspTop10        []string `json:"owaspTop10,omitempty"`
+	VulnerabilityType string   `json:"vulnerabilityType"` // sast or sca
+	PackageName       string   `json:"packageName,omitempty"`
+	PackageVersion    string   `json:"packageVersion,omitempty"`
 }
 
 // PolicyViolation represents a single policy violation
 type PolicyViolation struct {
-	ID                           string      `json:"id"`
-	PolicyId                     string      `json:"policyId"`
-	ProjectId                    string      `json:"projectId"`
-	ScanId                       string      `json:"scanId"`
-	OrganizationId               string      `json:"organizationId"`
-	ActionTaken                  string      `json:"actionTaken"` // BLOCK or WARN
-	AffectedVulnerabilitiesCount int         `json:"affectedVulnerabilitiesCount"`
-	Rule                         PolicyRule  `json:"rule"`
-	Acknowledged                 bool        `json:"acknowledged"`
-	AcknowledgedAt               string      `json:"acknowledgedAt,omitempty"`
-	AcknowledgementReason        string      `json:"acknowledgementReason,omitempty"`
-	CreatedAt                    string      `json:"createdAt"`
-	UpdatedAt                    string      `json:"updatedAt"`
+	ID                           string                  `json:"id"`
+	PolicyId                     string                  `json:"policyId"`
+	ProjectId                    string                  `json:"projectId"`
+	ScanId                       string                  `json:"scanId"`
+	OrganizationId               string                  `json:"organizationId"`
+	ActionTaken                  string                  `json:"actionTaken"` // BLOCK or WARN
+	AffectedVulnerabilitiesCount int                     `json:"affectedVulnerabilitiesCount"`
+	AffectedVulnerabilities      []AffectedVulnerability `json:"affectedVulnerabilities,omitempty"`
+	Rule                         PolicyRule              `json:"rule"`
+	Acknowledged                 bool                    `json:"acknowledged"`
+	AcknowledgedAt               string                  `json:"acknowledgedAt,omitempty"`
+	AcknowledgementReason        string                  `json:"acknowledgementReason,omitempty"`
+	CreatedAt                    string                  `json:"createdAt"`
+	UpdatedAt                    string                  `json:"updatedAt"`
 }
 
 // ViolationsResponse represents paginated violations

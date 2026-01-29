@@ -24,6 +24,7 @@ var (
 	scanInterval       int
 	enablePolicyCheck  bool
 	policyCheckTimeout int
+	showPolicyVulns    bool
 )
 
 var scanCmd = &cobra.Command{
@@ -308,6 +309,7 @@ func init() {
 	scanCmd.Flags().IntVar(&scanInterval, "interval", 5, "Interval (in seconds) between scan status checks when waiting for completion")
 	scanCmd.Flags().BoolVar(&enablePolicyCheck, "policy-check", true, "Enable policy evaluation after scan")
 	scanCmd.Flags().IntVar(&policyCheckTimeout, "policy-timeout", 300, "Timeout in seconds for policy evaluation")
+	scanCmd.Flags().BoolVar(&showPolicyVulns, "show-policy-vulns", true, "Show affected vulnerabilities in policy evaluation output")
 }
 
 // handlePolicyEvaluation handles the policy evaluation flow after scan completion
@@ -478,6 +480,9 @@ func displayAcknowledgedViolation(v api.PolicyViolation) {
 	logger.Warn("%s• [%s] %s", prefix, v.Rule.Name, description)
 	logger.Warn("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
 	logger.Warn("%s  ✓ Acknowledged: %s", prefix, v.AcknowledgementReason)
+
+	// Display affected vulnerabilities with links
+	displayAffectedVulnerabilities(v, false)
 }
 
 // displayViolation displays a single violation
@@ -497,5 +502,90 @@ func displayViolation(v api.PolicyViolation, isBlock bool) {
 		if v.Acknowledged {
 			logger.Warn("%s  ✓ Acknowledged: %s", prefix, v.AcknowledgementReason)
 		}
+	}
+
+	// Display affected vulnerabilities with links
+	displayAffectedVulnerabilities(v, isBlock)
+}
+
+// displayAffectedVulnerabilities displays the list of affected vulnerabilities with links
+func displayAffectedVulnerabilities(v api.PolicyViolation, isBlock bool) {
+	// Check if we should display vulnerabilities
+	if !showPolicyVulns {
+		return
+	}
+
+	if len(v.AffectedVulnerabilities) == 0 {
+		return
+	}
+
+	appBaseURL := getAppBaseURL()
+	projectId := v.ProjectId
+
+	// Limit display to first 5 vulnerabilities to avoid clutter
+	maxDisplay := 5
+	displayCount := len(v.AffectedVulnerabilities)
+	if displayCount > maxDisplay {
+		displayCount = maxDisplay
+	}
+
+	for i := 0; i < displayCount; i++ {
+		vuln := v.AffectedVulnerabilities[i]
+		
+		// Build the link - ensure vulnerabilityType is not empty
+		vulnType := vuln.VulnerabilityType
+		if vulnType == "" {
+			vulnType = "sast" // Default to sast if not specified
+		}
+		link := fmt.Sprintf("%s/project/%s/%s/issue/%s", appBaseURL, projectId, vulnType, vuln.ID)
+		
+		// Format vulnerability info: name, filePath, startLine-endLine, severity
+		var vulnInfo string
+		if vuln.VulnerabilityType == "sca" && vuln.PackageName != "" {
+			vulnInfo = fmt.Sprintf("%s - %s@%s", vuln.Name, vuln.PackageName, vuln.PackageVersion)
+		} else {
+			// SAST format: name, filePath, startLine-endLine
+			if vuln.EndLine > 0 && vuln.EndLine != vuln.StartLine {
+				vulnInfo = fmt.Sprintf("%s - %s (L%d-%d)", vuln.Name, vuln.FilePath, vuln.StartLine, vuln.EndLine)
+			} else {
+				vulnInfo = fmt.Sprintf("%s - %s (L%d)", vuln.Name, vuln.FilePath, vuln.StartLine)
+			}
+		}
+
+		if isBlock {
+			logger.Error("      → [%s] %s", vuln.Severity, vulnInfo)
+			logger.Error("        %s", link)
+		} else {
+			logger.Warn("      → [%s] %s", vuln.Severity, vulnInfo)
+			logger.Warn("        %s", link)
+		}
+	}
+
+	// Show remaining count if there are more
+	if len(v.AffectedVulnerabilities) > maxDisplay {
+		remaining := len(v.AffectedVulnerabilities) - maxDisplay
+		if isBlock {
+			logger.Error("      ... and %d more vulnerabilities", remaining)
+		} else {
+			logger.Warn("      ... and %d more vulnerabilities", remaining)
+		}
+	}
+}
+
+// getAppBaseURL returns the base URL for the web application based on configuration
+func getAppBaseURL() string {
+	// Check if app_url is set in config
+	appURL := viper.GetString("app_url")
+	if appURL != "" {
+		return strings.TrimSuffix(appURL, "/")
+	}
+
+	// Derive from region
+	region := strings.ToLower(viper.GetString("region"))
+	switch region {
+	case "eu":
+		return "https://eu.cybedefend.com"
+	default:
+		return "https://us.cybedefend.com"
 	}
 }
