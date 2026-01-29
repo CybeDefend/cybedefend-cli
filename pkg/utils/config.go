@@ -18,6 +18,7 @@ type Config struct {
 	APIURL    string
 	APIKey    string
 	ProjectID string
+	Branch    string
 	CI        bool
 	DEBUG     bool
 }
@@ -51,6 +52,7 @@ func LoadConfig() (*Config, error) {
 		APIURL:    viper.GetString("api_url"),
 		APIKey:    viper.GetString("api_key"),
 		ProjectID: viper.GetString("project_id"),
+		Branch:    viper.GetString("branch"),
 		CI:        viper.GetBool("ci"),
 		DEBUG:     viper.GetBool("debug"),
 	}

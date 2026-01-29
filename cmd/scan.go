@@ -39,6 +39,13 @@ var scanCmd = &cobra.Command{
 			projectIDScan = viper.GetString("project_id")
 		}
 
+		// Retrieve branch from config if not explicitly set via flag
+		if !cmd.Flags().Changed("branch") {
+			if configBranch := viper.GetString("branch"); configBranch != "" {
+				scanBranch = configBranch
+			}
+		}
+
 		if err := validateScanRequirements(apiKey, projectIDScan); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
