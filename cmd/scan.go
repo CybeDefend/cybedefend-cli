@@ -14,18 +14,19 @@ import (
 )
 
 var (
-	scanDir             string
-	scanFile            string
-	projectIDScan       string
-	scanBranch          string
-	waitForComplete     bool
-	breakOnFail         bool
-	breakOnSeverity     string
-	scanInterval        int
-	enablePolicyCheck   bool
-	policyCheckTimeout  int
-	showPolicyVulns     bool
-	showAllPolicyVulns  bool
+	scanDir            string
+	scanFile           string
+	projectIDScan      string
+	scanBranch         string
+	waitForComplete    bool
+	breakOnFail        bool
+	breakOnSeverity    string
+	scanInterval       int
+	enablePolicyCheck  bool
+	policyCheckTimeout int
+	showPolicyVulns    bool
+	showAllPolicyVulns bool
+	githubSummary      *utils.GitHubSummaryWriter
 )
 
 var scanCmd = &cobra.Command{
@@ -34,6 +35,11 @@ var scanCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		apiKey := viper.GetString("api_key")
 		apiURL := viper.GetString("api_url")
+
+		// Initialize GitHub Summary Writer only in CI mode
+		if viper.GetBool("ci") {
+			githubSummary = utils.NewGitHubSummaryWriter()
+		}
 
 		// Retrieve projectIDScan from flag, environment variable, or config
 		if projectIDScan == "" {
@@ -72,8 +78,22 @@ var scanCmd = &cobra.Command{
 
 		logger.Success("Scan started successfully. Scan ID: %s", scanID)
 
+		// Add scan header to GitHub summary (CI mode only)
+		if githubSummary != nil {
+			githubSummary.AddScanHeader(scanID, projectIDScan, scanBranch)
+		}
+
 		if waitForComplete {
 			handleScanCompletion(client, projectIDScan, scanID)
+		} else {
+			// Write summary for scan started only (CI mode only)
+			if githubSummary != nil {
+				githubSummary.AddScanStatus("started", 0, -1)
+				githubSummary.AddFinalStatus(true, "Scan started successfully. Not waiting for completion.")
+				if err := githubSummary.Write(); err != nil {
+					logger.Debug("Failed to write GitHub summary: %v", err)
+				}
+			}
 		}
 	},
 }
@@ -153,17 +173,35 @@ func handleScanCompletion(client *api.Client, projectID, scanID string) {
 	scanStatus, err := waitForScanToComplete(client, projectID, scanID, scanInterval)
 	if err != nil {
 		logger.Error("Error waiting for scan to complete: %v", err)
+		if githubSummary != nil {
+			githubSummary.AddScanStatus("error", 0, -1)
+			githubSummary.AddFinalStatus(false, fmt.Sprintf("Error: %v", err))
+			_ = githubSummary.Write()
+		}
 		os.Exit(1)
+	}
+
+	// Add scan status to GitHub summary (CI mode only)
+	if githubSummary != nil {
+		githubSummary.AddScanStatus(scanStatus.State, scanStatus.Progress, scanStatus.VulnerabilityDetected)
 	}
 
 	if breakOnFail && scanStatus.IsFailed() {
 		logger.Error("Scan failed. Exiting with error code.")
+		if githubSummary != nil {
+			githubSummary.AddFinalStatus(false, "Scan failed.")
+			_ = githubSummary.Write()
+		}
 		os.Exit(1)
 	}
 
 	// Skip policy check if scan failed
 	if scanStatus.IsFailed() {
 		logger.Info("Scan failed - skipping policy evaluation")
+		if githubSummary != nil {
+			githubSummary.AddFinalStatus(false, "Scan failed - policy evaluation skipped.")
+			_ = githubSummary.Write()
+		}
 		return
 	}
 
@@ -172,8 +210,22 @@ func handleScanCompletion(client *api.Client, projectID, scanID string) {
 	// Handle policy evaluation if enabled
 	if enablePolicyCheck {
 		exitCode := handlePolicyEvaluation(client, projectID, scanID)
+		// Write GitHub summary at the end (CI mode only)
+		if githubSummary != nil {
+			if err := githubSummary.Write(); err != nil {
+				logger.Debug("Failed to write GitHub summary: %v", err)
+			}
+		}
 		if exitCode != 0 {
 			os.Exit(exitCode)
+		}
+	} else {
+		// No policy check - write summary now (CI mode only)
+		if githubSummary != nil {
+			githubSummary.AddFinalStatus(true, "Scan completed successfully. Policy evaluation disabled.")
+			if err := githubSummary.Write(); err != nil {
+				logger.Debug("Failed to write GitHub summary: %v", err)
+			}
 		}
 	}
 }
@@ -329,21 +381,37 @@ func handlePolicyEvaluation(client *api.Client, projectId, scanId string) int {
 	evalStatus, err := waitForPolicyEvaluation(client, projectId, scanId, policyCheckTimeout)
 	if err != nil {
 		logger.Error("Policy evaluation error: %v", err)
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(false, fmt.Sprintf("Policy evaluation error: %v", err))
+		}
 		return 1
 	}
 
 	if evalStatus.Status == "NOT_STARTED" {
 		logger.Info("No policies configured for this project")
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(true, "No policies configured for this project")
+		}
 		return 0
 	}
 
 	if evalStatus.Status == "FAILED" {
 		logger.Error("Policy evaluation failed: %s", evalStatus.Message)
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(false, fmt.Sprintf("Policy evaluation failed: %s", evalStatus.Message))
+		}
 		return 1
 	}
 
 	if !evalStatus.HasEvaluation {
 		logger.Info("No policy evaluation available")
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(true, "No policy evaluation available")
+		}
 		return 0
 	}
 
@@ -351,11 +419,19 @@ func handlePolicyEvaluation(client *api.Client, projectId, scanId string) int {
 	violations, err := client.GetAllViolations(projectId, scanId)
 	if err != nil {
 		logger.Error("Failed to fetch violations: %v", err)
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(false, fmt.Sprintf("Failed to fetch violations: %v", err))
+		}
 		return 1
 	}
 
 	if len(violations) == 0 {
 		logger.Success("✓ Policy check passed - No violations found")
+		if githubSummary != nil {
+			githubSummary.AddPolicyEvaluationHeader(false)
+			githubSummary.AddFinalStatus(true, "Policy check passed - No violations found")
+		}
 		return 0
 	}
 
@@ -418,6 +494,14 @@ func displayViolationsAndGetExitCode(violations []api.PolicyViolation) int {
 		}
 	}
 
+	// Add policy evaluation header to GitHub summary (CI mode only)
+	if githubSummary != nil {
+		githubSummary.AddPolicyEvaluationHeader(len(violations) > 0)
+		if len(violations) > 0 {
+			githubSummary.AddPolicyViolationSummary(blockCount, warnCount, acknowledgedBlockCount)
+		}
+	}
+
 	// Display BLOCK violations (in red)
 	if len(blockViolations) > 0 {
 		logger.Error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -448,6 +532,11 @@ func displayViolationsAndGetExitCode(violations []api.PolicyViolation) int {
 		}
 	}
 
+	// Add violations to GitHub summary (only if showPolicyVulns is enabled and CI mode)
+	if showPolicyVulns && githubSummary != nil {
+		addViolationsToGitHubSummary(blockViolations, warnViolations, acknowledgedViolations)
+	}
+
 	// Summary
 	logger.Info("")
 	logger.Info("Policy Evaluation Summary:")
@@ -466,16 +555,99 @@ func displayViolationsAndGetExitCode(violations []api.PolicyViolation) int {
 	if blockCount > 0 {
 		logger.Error("")
 		logger.Error("❌ Build blocked due to %d policy violation(s)", blockCount)
+		if githubSummary != nil {
+			githubSummary.AddFinalStatus(false, fmt.Sprintf("Build blocked due to %d policy violation(s)", blockCount))
+		}
 		return 1 // Exit code 1 = build fails
 	}
 
 	logger.Success("")
-	if acknowledgedBlockCount > 0 {
-		logger.Success("✓ Policy check passed (%d acknowledged, %d warning(s))", acknowledgedBlockCount, warnCount)
+	if githubSummary != nil {
+		if acknowledgedBlockCount > 0 {
+			logger.Success("✓ Policy check passed (%d acknowledged, %d warning(s))", acknowledgedBlockCount, warnCount)
+			githubSummary.AddFinalStatus(true, fmt.Sprintf("Policy check passed (%d acknowledged, %d warning(s))", acknowledgedBlockCount, warnCount))
+		} else if warnCount > 0 {
+			logger.Success("✓ Policy check passed (with %d warning(s))", warnCount)
+			githubSummary.AddFinalStatus(true, fmt.Sprintf("Policy check passed with %d warning(s)", warnCount))
+		} else {
+			githubSummary.AddFinalStatus(true, "Policy check passed - no violations")
+		}
 	} else {
-		logger.Success("✓ Policy check passed (with %d warning(s))", warnCount)
+		if acknowledgedBlockCount > 0 {
+			logger.Success("✓ Policy check passed (%d acknowledged, %d warning(s))", acknowledgedBlockCount, warnCount)
+		} else if warnCount > 0 {
+			logger.Success("✓ Policy check passed (with %d warning(s))", warnCount)
+		}
 	}
 	return 0
+}
+
+// addViolationsToGitHubSummary adds all violations to the GitHub summary
+func addViolationsToGitHubSummary(blockViolations, warnViolations, acknowledgedViolations []api.PolicyViolation) {
+	appBaseURL := getAppBaseURL()
+
+	// Convert block violations
+	if len(blockViolations) > 0 {
+		blockInfos := make([]utils.PolicyViolationInfo, 0, len(blockViolations))
+		for _, v := range blockViolations {
+			blockInfos = append(blockInfos, convertViolationToInfo(v, appBaseURL))
+		}
+		githubSummary.AddBlockingViolations(blockInfos)
+	}
+
+	// Convert warning violations
+	if len(warnViolations) > 0 {
+		warnInfos := make([]utils.PolicyViolationInfo, 0, len(warnViolations))
+		for _, v := range warnViolations {
+			warnInfos = append(warnInfos, convertViolationToInfo(v, appBaseURL))
+		}
+		githubSummary.AddWarningViolations(warnInfos)
+	}
+
+	// Convert acknowledged violations
+	if len(acknowledgedViolations) > 0 {
+		ackInfos := make([]utils.PolicyViolationInfo, 0, len(acknowledgedViolations))
+		for _, v := range acknowledgedViolations {
+			ackInfos = append(ackInfos, convertViolationToInfo(v, appBaseURL))
+		}
+		githubSummary.AddAcknowledgedViolations(ackInfos)
+	}
+}
+
+// convertViolationToInfo converts an API PolicyViolation to a utils.PolicyViolationInfo
+func convertViolationToInfo(v api.PolicyViolation, appBaseURL string) utils.PolicyViolationInfo {
+	info := utils.PolicyViolationInfo{
+		RuleName:        v.Rule.Name,
+		RuleDescription: v.Rule.Description,
+		ActionTaken:     v.ActionTaken,
+		Acknowledged:    v.Acknowledged,
+		AckReason:       v.AcknowledgementReason,
+		VulnCount:       v.AffectedVulnerabilitiesCount,
+	}
+
+	// Convert affected vulnerabilities
+	for _, vuln := range v.AffectedVulnerabilities {
+		vulnType := vuln.VulnerabilityType
+		if vulnType == "" {
+			vulnType = "sast"
+		}
+		link := fmt.Sprintf("%s/project/%s/%s/issue/%s", appBaseURL, v.ProjectId, vulnType, vuln.ID)
+
+		info.Vulnerabilities = append(info.Vulnerabilities, utils.VulnerabilityInfo{
+			ID:             vuln.ID,
+			Name:           vuln.Name,
+			Severity:       vuln.Severity,
+			FilePath:       vuln.FilePath,
+			StartLine:      vuln.StartLine,
+			EndLine:        vuln.EndLine,
+			VulnType:       vulnType,
+			PackageName:    vuln.PackageName,
+			PackageVersion: vuln.PackageVersion,
+			Link:           link,
+		})
+	}
+
+	return info
 }
 
 // displayAcknowledgedViolation displays an acknowledged violation
@@ -485,7 +657,7 @@ func displayAcknowledgedViolation(v api.PolicyViolation) {
 	if description == "" {
 		description = fmt.Sprintf("%s %v", v.Rule.Type, v.Rule.Value)
 	}
-	
+
 	logger.Warn("%s• [%s] %s", prefix, v.Rule.Name, description)
 	logger.Warn("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
 	logger.Warn("%s  ✓ Acknowledged: %s", prefix, v.AcknowledgementReason)
@@ -501,7 +673,7 @@ func displayViolation(v api.PolicyViolation, isBlock bool) {
 	if description == "" {
 		description = fmt.Sprintf("%s %v", v.Rule.Type, v.Rule.Value)
 	}
-	
+
 	if isBlock {
 		logger.Error("%s• [%s] %s", prefix, v.Rule.Name, description)
 		logger.Error("%s  Affected vulnerabilities: %d", prefix, v.AffectedVulnerabilitiesCount)
@@ -543,14 +715,14 @@ func displayAffectedVulnerabilities(v api.PolicyViolation, isBlock bool) {
 
 	for i := 0; i < displayCount; i++ {
 		vuln := v.AffectedVulnerabilities[i]
-		
+
 		// Build the link - ensure vulnerabilityType is not empty
 		vulnType := vuln.VulnerabilityType
 		if vulnType == "" {
 			vulnType = "sast" // Default to sast if not specified
 		}
 		link := fmt.Sprintf("%s/project/%s/%s/issue/%s", appBaseURL, projectId, vulnType, vuln.ID)
-		
+
 		// Format vulnerability info: name, filePath, startLine-endLine, severity
 		var vulnInfo string
 		if vuln.VulnerabilityType == "sca" && vuln.PackageName != "" {
