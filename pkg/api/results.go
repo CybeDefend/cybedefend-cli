@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 // ScanResults represents the scan results structure.
@@ -41,11 +42,29 @@ type VulnerabilityDetails struct {
 
 // GetResults fetches the results for the specified project, result type, and page.
 func (c *Client) GetResults(projectID, resultType string, page, limit int) (*ScanResults, error) {
-	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=%d&sort=currentSeverity&order=asc&pageSizeNumber=%d&severity=low,high,medium,critical&status=to_verify,confirmed&priority=critical_urgent,urgent,normal,low,very_low", c.APIURL, projectID, resultType, page, limit)
+	baseURL := fmt.Sprintf("%s/project/%s/results/%s", c.APIURL, projectID, resultType)
 
-	logger.Debug("GET %s", url)
+	params := url.Values{}
+	params.Set("pageNumber", fmt.Sprintf("%d", page))
+	params.Set("sort", "currentSeverity")
+	params.Set("order", "asc")
+	params.Set("pageSizeNumber", fmt.Sprintf("%d", limit))
 
-	req, err := http.NewRequest("GET", url, nil)
+	for _, s := range []string{"critical", "high", "medium", "low"} {
+		params.Add("severity", s)
+	}
+	for _, s := range []string{"to_verify", "confirmed"} {
+		params.Add("status", s)
+	}
+	for _, s := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
+		params.Add("priority", s)
+	}
+
+	fullURL := baseURL + "?" + params.Encode()
+
+	logger.Debug("GET %s", fullURL)
+
+	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
 		return nil, err
 	}
