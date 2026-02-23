@@ -3,7 +3,11 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -19,10 +23,37 @@ const (
 	AuthEndpointUs = "https://auth-us.cybedefend.com"
 	AuthEndpointEu = "https://auth-eu.cybedefend.com"
 
-	// Logto application client IDs for the CybeDefend CLI (per region).
+	// Fallback Logto application client IDs (used when /client-apps is unreachable).
 	LogtoClientIDUs = "7o6r9cvvi8um0kisvn7hm"
 	LogtoClientIDEu = "fm90ay05zohu8fk2q45ms"
 )
+
+// FetchCLIClientID retrieves the CLI application client ID from the API.
+// Falls back to the hardcoded constant if the endpoint is unreachable.
+func FetchCLIClientID(apiURL, fallback string) string {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(apiURL + "/client-apps")
+	if err != nil {
+		return fallback
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fallback
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fallback
+	}
+	var result struct {
+		CLI struct {
+			AppID string `json:"appId"`
+		} `json:"cli"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil || result.CLI.AppID == "" {
+		return fallback
+	}
+	return result.CLI.AppID
+}
 
 type Config struct {
 	APIURL           string
@@ -67,11 +98,11 @@ func LoadConfig() (*Config, error) {
 	switch r {
 	case "eu":
 		authEndpoint = AuthEndpointEu
-		logtoClientID = LogtoClientIDEu
+		logtoClientID = FetchCLIClientID(APIURLEu, LogtoClientIDEu)
 		logtoAPIResource = APIURLEu
 	default:
 		authEndpoint = AuthEndpointUs
-		logtoClientID = LogtoClientIDUs
+		logtoClientID = FetchCLIClientID(APIURLUs, LogtoClientIDUs)
 		logtoAPIResource = APIURLUs
 	}
 	// Allow explicit auth_endpoint override (e.g. self-hosted)

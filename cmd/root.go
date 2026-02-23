@@ -111,6 +111,8 @@ func init() {
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(complianceCmd)
 	rootCmd.AddCommand(containerCmd)
+	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(logoutCmd)
 }
 
 func initConfig() {

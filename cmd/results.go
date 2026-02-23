@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
+	"cybedefend-cli/pkg/auth"
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
 	"encoding/json"
@@ -42,7 +43,6 @@ func init() {
 
 func executeResultsCommand(cmd *cobra.Command, args []string) {
 	pat := viper.GetString("pat")
-	apiURL := viper.GetString("api_url")
 
 	// Validate input arguments
 	validateInputs(pat)
@@ -53,7 +53,7 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
 
 	// Create the client and fetch results
-	client := api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	client := newClientFromConfig()
 
 	var results *api.ScanResults
 	if allResults {
@@ -68,8 +68,12 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 
 func validateInputs(pat string) {
 	if pat == "" {
-		logger.Error("authentication required: provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file. Create one at Account Settings → Personal Access Tokens")
-		os.Exit(1)
+		// Check for stored credentials
+		creds, err := auth.LoadCredentials()
+		if err != nil || creds == nil {
+			logger.Error("authentication required: run 'cybedefend login', or provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file")
+			os.Exit(1)
+		}
 	}
 
 	if projectIDResults == "" {

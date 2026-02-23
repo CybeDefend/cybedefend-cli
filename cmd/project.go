@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
+	"cybedefend-cli/pkg/auth"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/utils"
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -105,8 +108,47 @@ var projectGetCmd = &cobra.Command{
 // ── helpers ─────────────────────────────────────────────────────────
 
 // newClientFromConfig creates an API client using the current viper/config state.
+// Priority: 1) --pat flag / env / config  2) stored credentials from `cybedefend login`
 func newClientFromConfig() *api.Client {
 	pat := viper.GetString("pat")
+	apiURL := viper.GetString("api_url")
+
+	// If PAT is provided explicitly, use PAT mode (honour current --region / config).
+	if pat != "" {
+		return api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	}
+
+	// Try to load stored credentials.
+	creds, err := auth.LoadCredentials()
+	if err == nil && creds != nil {
+		// Derive endpoints from the region stored in credentials, not the CLI default.
+		credAPIURL, credAuthEndpoint, credClientID, credAPIResource := regionEndpoints(creds.Region)
+
+		switch creds.Type {
+		case auth.AuthTypePAT:
+			return api.NewClient(credAPIURL, creds.PAT, credAuthEndpoint, credClientID, credAPIResource)
+		case auth.AuthTypeOAuth:
+			expiry, _ := time.Parse(time.RFC3339, creds.TokenExpiry)
+			return api.NewClientWithOAuth(credAPIURL, credAuthEndpoint, credClientID, credAPIResource,
+				creds.AccessToken, creds.RefreshToken, expiry, creds.Region)
+		}
+	}
+
+	// No credentials found — return client anyway; it will error on first API call.
+	return api.NewClient(apiURL, "", config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+}
+
+// regionEndpoints returns the API URL, auth endpoint, Logto client ID and API resource
+// for a given region string ("eu" or anything else → us).
+func regionEndpoints(region string) (apiURL, authEndpoint, clientID, apiResource string) {
+	if region == "eu" {
+		return utils.APIURLEu, utils.AuthEndpointEu, utils.FetchCLIClientID(utils.APIURLEu, utils.LogtoClientIDEu), utils.APIURLEu
+	}
+	return utils.APIURLUs, utils.AuthEndpointUs, utils.FetchCLIClientID(utils.APIURLUs, utils.LogtoClientIDUs), utils.APIURLUs
+}
+
+// newClientFromConfigWithPAT creates an API client using an explicit PAT (used by login --pat).
+func newClientFromConfigWithPAT(pat string) *api.Client {
 	apiURL := viper.GetString("api_url")
 	return api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 }
