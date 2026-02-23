@@ -43,6 +43,29 @@ var rootCmd = &cobra.Command{
 			logger.Info("Using config file: %s", viper.ConfigFileUsed())
 		}
 
+		// Detect deprecated --api-key / CYBEDEFEND_API_KEY / api_key usage and abort.
+		apiKeyFlagChanged := cmd.Root().PersistentFlags().Lookup("api-key").Changed
+		_, apiKeyEnvSet := os.LookupEnv("CYBEDEFEND_API_KEY")
+		apiKeyInConfig := viper.InConfig("api_key")
+		if apiKeyFlagChanged || apiKeyEnvSet || apiKeyInConfig {
+			patURL := "https://us.cybedefend.com/profile/personal-access-tokens"
+			if strings.ToLower(viper.GetString("region")) == "eu" {
+				patURL = "https://eu.cybedefend.com/profile/personal-access-tokens"
+			}
+			logger.Error("╔══════════════════════════════════════════════════════════════╗")
+			logger.Error("║           AUTHENTICATION METHOD DEPRECATED                   ║")
+			logger.Error("╚══════════════════════════════════════════════════════════════╝")
+			logger.Error("--api-key / CYBEDEFEND_API_KEY / api_key is fully deprecated")
+			logger.Error("and no longer accepted by the CybeDefend API (HTTP 410 Gone).")
+			logger.Error("")
+			logger.Error("Please migrate to a Personal Access Token (PAT):")
+			logger.Error("  1. Create a PAT at: %s", patURL)
+			logger.Error("  2. Replace --api-key <key>  →  --pat <your-pat>")
+			logger.Error("  3. Replace env CYBEDEFEND_API_KEY  →  CYBEDEFEND_PAT")
+			logger.Error("  4. Replace api_key: in config  →  pat:")
+			os.Exit(1)
+		}
+
 		return nil
 	},
 }
@@ -59,14 +82,21 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().String("api-url", utils.APIURLUs, "API URL")
-	rootCmd.PersistentFlags().String("api-key", "", "API Key")
+	rootCmd.PersistentFlags().String("pat", "", "Personal Access Token (PAT) — create one in Account Settings → Personal Access Tokens")
+	rootCmd.PersistentFlags().String("auth-endpoint", "", "Auth endpoint URL (optional, derived from --region by default)")
 	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
 	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.cybedefend/config.yaml) (optional)")
 	rootCmd.PersistentFlags().StringVar(&region, "region", "us", "Platform region to use: us or eu (ignored if --api-url is provided)")
 
+	// Deprecated --api-key flag kept for detection/error messaging only.
+	rootCmd.PersistentFlags().String("api-key", "", "[DEPRECATED] Use --pat instead")
+	rootCmd.PersistentFlags().MarkHidden("api-key")
+
 	// Bind flags to Viper
 	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
+	viper.BindPFlag("pat", rootCmd.PersistentFlags().Lookup("pat"))
+	viper.BindPFlag("auth_endpoint", rootCmd.PersistentFlags().Lookup("auth-endpoint"))
 	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
@@ -75,6 +105,12 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(projectCmd)
+	rootCmd.AddCommand(teamCmd)
+	rootCmd.AddCommand(overviewCmd)
+	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(complianceCmd)
+	rootCmd.AddCommand(containerCmd)
 }
 
 func initConfig() {

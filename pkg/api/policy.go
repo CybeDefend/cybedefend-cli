@@ -84,7 +84,11 @@ func (c *Client) GetEvaluationStatus(projectId, scanId string) (*EvaluationStatu
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -123,7 +127,11 @@ func (c *Client) GetViolations(projectId, scanId string, page, limit int) (*Viol
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

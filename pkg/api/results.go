@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 // ScanResults represents the scan results structure.
@@ -42,33 +43,33 @@ type VulnerabilityDetails struct {
 
 // GetResults fetches the results for the specified project, result type, and page.
 func (c *Client) GetResults(projectID, resultType string, page, limit int) (*ScanResults, error) {
-	baseURL := fmt.Sprintf("%s/project/%s/results/%s", c.APIURL, projectID, resultType)
-
-	params := url.Values{}
-	params.Set("pageNumber", fmt.Sprintf("%d", page))
-	params.Set("sort", "currentSeverity")
-	params.Set("order", "asc")
-	params.Set("pageSizeNumber", fmt.Sprintf("%d", limit))
-
+	q := url.Values{}
+	q.Set("pageNumber", strconv.Itoa(page))
+	q.Set("sort", "currentSeverity")
+	q.Set("order", "asc")
+	q.Set("pageSizeNumber", strconv.Itoa(limit))
 	for _, s := range []string{"critical", "high", "medium", "low"} {
-		params.Add("severity", s)
+		q.Add("severity[]", s)
 	}
 	for _, s := range []string{"to_verify", "confirmed"} {
-		params.Add("status", s)
+		q.Add("status[]", s)
 	}
 	for _, s := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
-		params.Add("priority", s)
+		q.Add("priority[]", s)
 	}
+	rawURL := fmt.Sprintf("%s/project/%s/results/%s?%s", c.APIURL, projectID, resultType, q.Encode())
 
-	fullURL := baseURL + "?" + params.Encode()
+	logger.Debug("GET %s", rawURL)
 
-	logger.Debug("GET %s", fullURL)
-
-	req, err := http.NewRequest("GET", fullURL, nil)
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

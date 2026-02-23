@@ -41,11 +41,11 @@ func init() {
 }
 
 func executeResultsCommand(cmd *cobra.Command, args []string) {
-	apiKey := viper.GetString("api_key")
+	pat := viper.GetString("pat")
 	apiURL := viper.GetString("api_url")
 
 	// Validate input arguments
-	validateInputs(apiKey)
+	validateInputs(pat)
 
 	// Adjust output file extensions based on format
 	setOutputFileDefaults()
@@ -53,7 +53,7 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
 
 	// Create the client and fetch results
-	client := api.NewClient(apiURL, apiKey)
+	client := api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 
 	var results *api.ScanResults
 	if allResults {
@@ -66,9 +66,9 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	outputResults(results)
 }
 
-func validateInputs(apiKey string) {
-	if apiKey == "" {
-		logger.Error("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file.")
+func validateInputs(pat string) {
+	if pat == "" {
+		logger.Error("authentication required: provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file. Create one at Account Settings → Personal Access Tokens")
 		os.Exit(1)
 	}
 
@@ -118,6 +118,11 @@ func fetchResults(client *api.Client, page int) *api.ScanResults {
 	if err != nil {
 		logger.Error("Error fetching results: %v", err)
 		os.Exit(1)
+	}
+
+	if results.TotalPages == 0 {
+		logger.Info("No results found for this project.")
+		return results
 	}
 
 	if page > results.TotalPages {
