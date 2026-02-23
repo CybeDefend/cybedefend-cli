@@ -53,7 +53,7 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
 
 	// Create the client and fetch results
-	client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID)
+	client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 
 	var results *api.ScanResults
 	if allResults {
@@ -118,6 +118,11 @@ func fetchResults(client *api.Client, page int) *api.ScanResults {
 	if err != nil {
 		logger.Error("Error fetching results: %v", err)
 		os.Exit(1)
+	}
+
+	if results.TotalPages == 0 {
+		logger.Info("No results found for this project.")
+		return results
 	}
 
 	if page > results.TotalPages {

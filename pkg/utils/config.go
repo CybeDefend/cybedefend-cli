@@ -19,20 +19,21 @@ const (
 	LogtoEndpointUs = "https://auth-us.cybedefend.com"
 	LogtoEndpointEu = "https://auth-eu.cybedefend.com"
 
-	// DefaultLogtoClientID is the Logto application client ID for the CybeDefend CLI.
-	// Override via --logto-client-id flag or logto_client_id in config.
-	DefaultLogtoClientID = "cybedefend-cli"
+	// Logto application client IDs for the CybeDefend CLI (per region).
+	LogtoClientIDUs = "7o6r9cvvi8um0kisvn7hm"
+	LogtoClientIDEu = "fm90ay05zohu8fk2q45ms"
 )
 
 type Config struct {
-	APIURL         string
-	PAT            string
-	LogtoEndpoint  string
-	LogtoClientID  string
-	ProjectID      string
-	Branch         string
-	CI             bool
-	DEBUG          bool
+	APIURL          string
+	PAT             string
+	LogtoEndpoint   string
+	LogtoClientID   string
+	LogtoAPIResource string // always the real registered API resource (never localhost)
+	ProjectID       string
+	Branch          string
+	CI              bool
+	DEBUG           bool
 }
 
 func LoadConfig() (*Config, error) {
@@ -45,7 +46,6 @@ func LoadConfig() (*Config, error) {
 	// Set default values
 	viper.SetDefault("api_url", APIURLUs)
 	viper.SetDefault("ci", false) // Default CI to false
-	viper.SetDefault("logto_client_id", DefaultLogtoClientID)
 
 	// Read in environment variables that match
 	viper.SetEnvPrefix("CYBEDEFEND")
@@ -61,23 +61,30 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	// Derive region-aware Logto endpoint if not explicitly configured
-	logtoEndpoint := viper.GetString("logto_endpoint")
-	if logtoEndpoint == "" {
-		r := viper.GetString("region")
-		switch r {
-		case "eu":
-			logtoEndpoint = LogtoEndpointEu
-		default:
-			logtoEndpoint = LogtoEndpointUs
-		}
+	// Derive region-aware Logto endpoint, client ID and API resource from region (hardcoded, not overridable)
+	var logtoEndpoint, logtoClientID, logtoAPIResource string
+	r := viper.GetString("region")
+	switch r {
+	case "eu":
+		logtoEndpoint = LogtoEndpointEu
+		logtoClientID = LogtoClientIDEu
+		logtoAPIResource = APIURLEu
+	default:
+		logtoEndpoint = LogtoEndpointUs
+		logtoClientID = LogtoClientIDUs
+		logtoAPIResource = APIURLUs
+	}
+	// Allow explicit logto_endpoint override (e.g. self-hosted)
+	if override := viper.GetString("logto_endpoint"); override != "" {
+		logtoEndpoint = override
 	}
 
 	config := &Config{
-		APIURL:        viper.GetString("api_url"),
-		PAT:           viper.GetString("pat"),
-		LogtoEndpoint: logtoEndpoint,
-		LogtoClientID: viper.GetString("logto_client_id"),
+		APIURL:           viper.GetString("api_url"),
+		PAT:              viper.GetString("pat"),
+		LogtoEndpoint:    logtoEndpoint,
+		LogtoClientID:    logtoClientID,
+		LogtoAPIResource: logtoAPIResource,
 		ProjectID:     viper.GetString("project_id"),
 		Branch:        viper.GetString("branch"),
 		CI:            viper.GetBool("ci"),

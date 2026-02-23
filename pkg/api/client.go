@@ -23,13 +23,13 @@ type Client struct {
 	tokenExpiry time.Time
 }
 
-func NewClient(apiURL, pat, logtoEndpoint, logtoClientID string) *Client {
+func NewClient(apiURL, pat, logtoEndpoint, logtoClientID, logtoAPIResource string) *Client {
 	return &Client{
 		APIURL:        apiURL,
 		PAT:           pat,
 		LogtoEndpoint: logtoEndpoint,
 		LogtoClientID: logtoClientID,
-		APIResource:   apiURL,
+		APIResource:   logtoAPIResource,
 	}
 }
 

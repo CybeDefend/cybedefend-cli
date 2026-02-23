@@ -69,7 +69,7 @@ var scanCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID)
+		client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 		scanID, err := executeScan(client, projectIDScan, zipPath, scanBranch)
 		if err != nil {
 			logger.Error("Error starting scan: %v", err)

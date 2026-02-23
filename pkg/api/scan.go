@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -275,20 +276,19 @@ func (c *Client) GetScanStatus(projectID, scanID string) (*ScanStatus, error) {
 
 // buildVulnerabilitiesURL constructs the URL for fetching vulnerabilities with query parameters
 func buildVulnerabilitiesURL(apiURL, projectID, scanType string, severities []string) string {
-	url := fmt.Sprintf("%s/project/%s/results/%s?pageNumber=1&sort=currentSeverity&order=asc", apiURL, projectID, scanType)
-
-	// Add severity parameters
-	for _, severity := range severities {
-		url = fmt.Sprintf("%s&severity[]=%s", url, severity)
+	q := url.Values{}
+	q.Set("pageNumber", "1")
+	q.Set("sort", "currentSeverity")
+	q.Set("order", "asc")
+	for _, s := range severities {
+		q.Add("severity[]", s)
 	}
-
-	// Add the status parameters - we only want vulnerabilities that are not resolved or not_exploitable
-	url = fmt.Sprintf("%s&status[]=to_verify&status[]=confirmed", url)
-
-	// Add the priority parameters
-	url = fmt.Sprintf("%s&priority[]=critical_urgent&priority[]=urgent&priority[]=normal&priority[]=low&priority[]=very_low", url)
-
-	return url
+	q.Add("status[]", "to_verify")
+	q.Add("status[]", "confirmed")
+	for _, p := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
+		q.Add("priority[]", p)
+	}
+	return fmt.Sprintf("%s/project/%s/results/%s?%s", apiURL, projectID, scanType, q.Encode())
 }
 
 // countVulnerabilitiesBySeverity counts vulnerabilities by severity from the API response
