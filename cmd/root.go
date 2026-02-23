@@ -105,6 +105,12 @@ func init() {
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(projectCmd)
+	rootCmd.AddCommand(teamCmd)
+	rootCmd.AddCommand(overviewCmd)
+	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(complianceCmd)
+	rootCmd.AddCommand(containerCmd)
 }
 
 func initConfig() {
