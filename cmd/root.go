@@ -156,8 +156,8 @@ func initConfig() {
 
 // displayBanner prints the ASCII art banner
 func displayBanner() {
-	// Define the ANSI color code for RGB(40,20,52)
-	color := "\033[38;2;40;20;52m"
+	// White
+	color := "\033[97m"
 	reset := "\033[0m"
 
 	output := colorable.NewColorableStdout()
