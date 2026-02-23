@@ -53,7 +53,7 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
 
 	// Create the client and fetch results
-	client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	client := api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 
 	var results *api.ScanResults
 	if allResults {

@@ -11,12 +11,12 @@ import (
 
 // ProjectOverview represents the project-level overview response.
 type ProjectOverview struct {
-	TotalBySeverity         []SeverityCount             `json:"totalBySeverity"`
-	TotalByState            []StateCount                `json:"totalByState"`
-	TotalByAnalysisType     []AnalysisTypeCount         `json:"totalByAnalysisType"`
+	TotalBySeverity         []SeverityCount              `json:"totalBySeverity"`
+	TotalByState            []StateCount                 `json:"totalByState"`
+	TotalByAnalysisType     []AnalysisTypeCount          `json:"totalByAnalysisType"`
 	VulnerabilitiesOverTime []VulnerabilityOverTimeEntry `json:"vulnerabilitiesOverTime"`
-	RiskScore               float64                     `json:"riskScore"`
-	RiskLevel               string                      `json:"riskLevel"`
+	RiskScore               float64                      `json:"riskScore"`
+	RiskLevel               string                       `json:"riskLevel"`
 }
 
 // SeverityCount is a severity + count pair.
@@ -46,16 +46,16 @@ type VulnerabilityOverTimeEntry struct {
 
 // OrgOverview represents the organization-level overview response.
 type OrgOverview struct {
-	TotalBySeverity         json.RawMessage             `json:"totalBySeverity"`
-	TotalByState            json.RawMessage             `json:"totalByState"`
-	TotalByAnalysisType     json.RawMessage             `json:"totalByAnalysisType"`
-	VulnerabilitiesOverTime json.RawMessage             `json:"vulnerabilitiesOverTime"`
-	RiskScore               float64                     `json:"riskScore"`
-	RiskLevel               string                      `json:"riskLevel"`
-	TotalProjects           int                         `json:"totalProjects,omitempty"`
-	TotalScans              int                         `json:"totalScans,omitempty"`
-	ProjectSummaries        json.RawMessage             `json:"projectSummaries,omitempty"`
-	TrendData               json.RawMessage             `json:"trendData,omitempty"`
+	TotalBySeverity         json.RawMessage `json:"totalBySeverity"`
+	TotalByState            json.RawMessage `json:"totalByState"`
+	TotalByAnalysisType     json.RawMessage `json:"totalByAnalysisType"`
+	VulnerabilitiesOverTime json.RawMessage `json:"vulnerabilitiesOverTime"`
+	RiskScore               float64         `json:"riskScore"`
+	RiskLevel               string          `json:"riskLevel"`
+	TotalProjects           int             `json:"totalProjects,omitempty"`
+	TotalScans              int             `json:"totalScans,omitempty"`
+	ProjectSummaries        json.RawMessage `json:"projectSummaries,omitempty"`
+	TrendData               json.RawMessage `json:"trendData,omitempty"`
 }
 
 // GetProjectOverview retrieves the results overview for a project.

@@ -14,7 +14,7 @@ import (
 type Client struct {
 	APIURL        string
 	PAT           string
-	LogtoEndpoint string
+	AuthEndpoint  string
 	LogtoClientID string
 	APIResource   string // sent as `resource` in token exchange (same as APIURL)
 
@@ -23,11 +23,11 @@ type Client struct {
 	tokenExpiry time.Time
 }
 
-func NewClient(apiURL, pat, logtoEndpoint, logtoClientID, logtoAPIResource string) *Client {
+func NewClient(apiURL, pat, authEndpoint, logtoClientID, logtoAPIResource string) *Client {
 	return &Client{
 		APIURL:        apiURL,
 		PAT:           pat,
-		LogtoEndpoint: logtoEndpoint,
+		AuthEndpoint:  authEndpoint,
 		LogtoClientID: logtoClientID,
 		APIResource:   logtoAPIResource,
 	}
@@ -51,7 +51,7 @@ func (c *Client) exchangeToken() (string, error) {
 		return "", fmt.Errorf("authentication required: provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file. Create one at Account Settings → Personal Access Tokens")
 	}
 
-	tokenURL := fmt.Sprintf("%s/oidc/token", strings.TrimRight(c.LogtoEndpoint, "/"))
+	tokenURL := fmt.Sprintf("%s/oidc/token", strings.TrimRight(c.AuthEndpoint, "/"))
 
 	data := url.Values{}
 	data.Set("client_id", c.LogtoClientID)

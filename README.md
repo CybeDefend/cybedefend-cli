@@ -123,12 +123,12 @@ api_url: "https://api-us.cybedefend.com" # default if not overridden
 pat: "pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # Personal Access Token — create in Account Settings → Personal Access Tokens
 project_id: "your-project-id"
 branch: "main" # Optional: default branch for scans
-# Optional: choose region (us/eu). If set, api_url and logto_endpoint will be derived unless overridden.
+# Optional: choose region (us/eu). If set, api_url and auth_endpoint will be derived unless overridden.
 # region: "eu"
 # Optional: custom app URL for vulnerability links (for self-hosted deployments)
 # app_url: "https://app.example.com"
-# Optional: override Logto auth endpoint (derived from region by default)
-# logto_endpoint: "https://auth-eu.cybedefend.com"
+# Optional: override auth endpoint (derived from region by default)
+# auth_endpoint: "https://auth-eu.cybedefend.com"
 # logto_client_id: "cybedefend-cli"
 ```
 

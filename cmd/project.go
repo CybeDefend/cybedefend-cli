@@ -108,7 +108,7 @@ var projectGetCmd = &cobra.Command{
 func newClientFromConfig() *api.Client {
 	pat := viper.GetString("pat")
 	apiURL := viper.GetString("api_url")
-	return api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	return api.NewClient(apiURL, pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
 }
 
 // getProjectID reads --project-id from flag, env, or config.

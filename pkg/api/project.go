@@ -11,24 +11,24 @@ import (
 
 // Project represents a CybeDefend project.
 type Project struct {
-	ID                        string   `json:"id"`
-	Name                      string   `json:"name"`
-	TeamID                    string   `json:"teamId"`
-	OrganizationID            string   `json:"organizationId"`
-	AIMergeRequestEnabled     bool     `json:"aiMergeRequestEnabled"`
-	ImprovingResultsEnabled   bool     `json:"improvingResultsEnabled"`
-	AutoFixEnabled            bool     `json:"autoFixEnabled"`
-	Language                  []string `json:"language"`
-	CreatedAt                 string   `json:"createdAt"`
-	UpdatedAt                 string   `json:"updatedAt"`
+	ID                      string   `json:"id"`
+	Name                    string   `json:"name"`
+	TeamID                  string   `json:"teamId"`
+	OrganizationID          string   `json:"organizationId"`
+	AIMergeRequestEnabled   bool     `json:"aiMergeRequestEnabled"`
+	ImprovingResultsEnabled bool     `json:"improvingResultsEnabled"`
+	AutoFixEnabled          bool     `json:"autoFixEnabled"`
+	Language                []string `json:"language"`
+	CreatedAt               string   `json:"createdAt"`
+	UpdatedAt               string   `json:"updatedAt"`
 }
 
 // CreateProjectRequest represents the body for creating a project.
 type CreateProjectRequest struct {
-	Name                      string `json:"name"`
-	AIMergeRequestEnabled     *bool  `json:"aiMergeRequestEnabled,omitempty"`
-	ImprovingResultsEnabled   *bool  `json:"improvingResultsEnabled,omitempty"`
-	AutoFixEnabled            *bool  `json:"autoFixEnabled,omitempty"`
+	Name                    string `json:"name"`
+	AIMergeRequestEnabled   *bool  `json:"aiMergeRequestEnabled,omitempty"`
+	ImprovingResultsEnabled *bool  `json:"improvingResultsEnabled,omitempty"`
+	AutoFixEnabled          *bool  `json:"autoFixEnabled,omitempty"`
 }
 
 // CreateProject creates a new project under the given team.

@@ -14,10 +14,10 @@ const (
 	APIURLEu = "https://api-eu.cybedefend.com"
 )
 
-// Logto endpoint constants (per region)
+// Auth endpoint constants (per region)
 const (
-	LogtoEndpointUs = "https://auth-us.cybedefend.com"
-	LogtoEndpointEu = "https://auth-eu.cybedefend.com"
+	AuthEndpointUs = "https://auth-us.cybedefend.com"
+	AuthEndpointEu = "https://auth-eu.cybedefend.com"
 
 	// Logto application client IDs for the CybeDefend CLI (per region).
 	LogtoClientIDUs = "7o6r9cvvi8um0kisvn7hm"
@@ -25,15 +25,15 @@ const (
 )
 
 type Config struct {
-	APIURL          string
-	PAT             string
-	LogtoEndpoint   string
-	LogtoClientID   string
+	APIURL           string
+	PAT              string
+	AuthEndpoint     string
+	LogtoClientID    string
 	LogtoAPIResource string // always the real registered API resource (never localhost)
-	ProjectID       string
-	Branch          string
-	CI              bool
-	DEBUG           bool
+	ProjectID        string
+	Branch           string
+	CI               bool
+	DEBUG            bool
 }
 
 func LoadConfig() (*Config, error) {
@@ -61,34 +61,34 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
-	// Derive region-aware Logto endpoint, client ID and API resource from region (hardcoded, not overridable)
-	var logtoEndpoint, logtoClientID, logtoAPIResource string
+	// Derive region-aware auth endpoint, client ID and API resource from region (hardcoded, not overridable)
+	var authEndpoint, logtoClientID, logtoAPIResource string
 	r := viper.GetString("region")
 	switch r {
 	case "eu":
-		logtoEndpoint = LogtoEndpointEu
+		authEndpoint = AuthEndpointEu
 		logtoClientID = LogtoClientIDEu
 		logtoAPIResource = APIURLEu
 	default:
-		logtoEndpoint = LogtoEndpointUs
+		authEndpoint = AuthEndpointUs
 		logtoClientID = LogtoClientIDUs
 		logtoAPIResource = APIURLUs
 	}
-	// Allow explicit logto_endpoint override (e.g. self-hosted)
-	if override := viper.GetString("logto_endpoint"); override != "" {
-		logtoEndpoint = override
+	// Allow explicit auth_endpoint override (e.g. self-hosted)
+	if override := viper.GetString("auth_endpoint"); override != "" {
+		authEndpoint = override
 	}
 
 	config := &Config{
 		APIURL:           viper.GetString("api_url"),
 		PAT:              viper.GetString("pat"),
-		LogtoEndpoint:    logtoEndpoint,
+		AuthEndpoint:     authEndpoint,
 		LogtoClientID:    logtoClientID,
 		LogtoAPIResource: logtoAPIResource,
-		ProjectID:     viper.GetString("project_id"),
-		Branch:        viper.GetString("branch"),
-		CI:            viper.GetBool("ci"),
-		DEBUG:         viper.GetBool("debug"),
+		ProjectID:        viper.GetString("project_id"),
+		Branch:           viper.GetString("branch"),
+		CI:               viper.GetBool("ci"),
+		DEBUG:            viper.GetBool("debug"),
 	}
 
 	return config, nil

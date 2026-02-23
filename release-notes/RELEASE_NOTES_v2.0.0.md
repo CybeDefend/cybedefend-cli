@@ -236,7 +236,7 @@ All commands support these flags:
 | `--debug` | Enable debug logging | `false` |
 | `--config` | Path to config file | `$HOME/.cybedefend/config.yaml` |
 | `--api-url` | Override API URL | derived from region |
-| `--logto-endpoint` | Override Logto endpoint | derived from region |
+| `--auth-endpoint` | Override auth endpoint | derived from region |
 
 ---
 
@@ -277,7 +277,7 @@ project_id: "proj_xxx"
 **After:**
 ```yaml
 pat: "pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-region: "eu"   # or "us" — sets api_url and logto_endpoint automatically
+region: "eu"   # or "us" — sets api_url and auth_endpoint automatically
 project_id: "proj_xxx"
 ```
 

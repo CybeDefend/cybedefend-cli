@@ -83,7 +83,7 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().String("api-url", utils.APIURLUs, "API URL")
 	rootCmd.PersistentFlags().String("pat", "", "Personal Access Token (PAT) — create one in Account Settings → Personal Access Tokens")
-	rootCmd.PersistentFlags().String("logto-endpoint", "", "Logto endpoint URL (optional, derived from --region by default)")
+	rootCmd.PersistentFlags().String("auth-endpoint", "", "Auth endpoint URL (optional, derived from --region by default)")
 	rootCmd.PersistentFlags().Bool("ci", false, "CI mode")
 	rootCmd.PersistentFlags().Bool("debug", false, "Debug mode")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file (default is $HOME/.cybedefend/config.yaml) (optional)")
@@ -96,7 +96,7 @@ func init() {
 	// Bind flags to Viper
 	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
 	viper.BindPFlag("pat", rootCmd.PersistentFlags().Lookup("pat"))
-	viper.BindPFlag("logto_endpoint", rootCmd.PersistentFlags().Lookup("logto-endpoint"))
+	viper.BindPFlag("auth_endpoint", rootCmd.PersistentFlags().Lookup("auth-endpoint"))
 	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
