@@ -15,7 +15,7 @@ The **CybeDefend CLI** is a command-line interface tool for interacting with the
 - **Policy Evaluation & Break Build**: Automatically enforce security policies and break builds based on policy violations.
 - Cross-platform support: Linux, macOS, and Windows.
 - CI/CD-friendly mode with simplified, colorless output.
-- API key-based authentication.
+- Personal Access Token (PAT) authentication via Logto IAM.
 - Customizable configurations via flags, environment variables, or configuration files.
 - Designed for use in CI/CD pipelines, Docker containers, and local environments.
 
@@ -120,13 +120,16 @@ You can create a `config.yaml` file in one of the following locations:
 Example `config.yaml`:
 ```yaml
 api_url: "https://api-us.cybedefend.com" # default if not overridden
-api_key: "your-api-key"
+pat: "pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # Personal Access Token — create in Account Settings → Personal Access Tokens
 project_id: "your-project-id"
 branch: "main" # Optional: default branch for scans
-# Optional: choose region (us/eu). If set, api_url will be derived unless overridden by flag/env.
+# Optional: choose region (us/eu). If set, api_url and logto_endpoint will be derived unless overridden.
 # region: "eu"
 # Optional: custom app URL for vulnerability links (for self-hosted deployments)
 # app_url: "https://app.example.com"
+# Optional: override Logto auth endpoint (derived from region by default)
+# logto_endpoint: "https://auth-eu.cybedefend.com"
+# logto_client_id: "cybedefend-cli"
 ```
 
 ### Environment Variables
@@ -135,7 +138,7 @@ The CLI also supports environment variables:
 
 - `CYBEDEFEND_API_URL`: API base URL.
 - `CYBEDEFEND_REGION`: Platform region (`us` or `eu`). Ignored if `CYBEDEFEND_API_URL` is set.
-- `CYBEDEFEND_API_KEY`: API key for authentication.
+- `CYBEDEFEND_PAT`: Personal Access Token for authentication.
 - `CYBEDEFEND_PROJECT_ID`: Default project ID.
 
 ### Command-Line Flags
@@ -144,8 +147,10 @@ You can override configurations using flags:
 
 - `--region`: Platform region to use: `us` (default) or `eu`. If set, it selects `https://api-us.cybedefend.com` or `https://api-eu.cybedefend.com`.
 - `--api-url`: API base URL (manual override; takes precedence over `--region`).
-- `--api-key`: API key.
+- `--pat`: Personal Access Token (PAT). Create one in Account Settings → Personal Access Tokens.
 - `--project-id`: Project ID.
+
+> ⚠️ `--api-key` / `CYBEDEFEND_API_KEY` / `api_key:` are permanently deprecated. API keys issued before the migration return `HTTP 410 Gone`. Migrate to PAT.
 
 ---
 
@@ -181,7 +186,7 @@ cybedefend scan [flags]
 
 1. Scan a directory:
    ```bash
-   cybedefend scan --dir ./my-project --api-key your-api-key --project-id your-project-id
+   cybedefend scan --dir ./my-project --pat your-pat --project-id your-project-id
    ```
 
 2. Scan a zip file:
@@ -421,12 +426,12 @@ jobs:
 
       - name: Install CybeDefend CLI
         run: |
-          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.0.9/cybedefend-linux-amd64 -o cybedefend
+          curl -L https://github.com/CybeDefend/cybedefend-cli/releases/download/v1.1.0/cybedefend-linux-amd64 -o cybedefend
           chmod +x cybedefend
           sudo mv cybedefend /usr/local/bin/
 
       - name: Run security scan
-        run: cybedefend scan --dir ./ --ci --api-key ${{ secrets.CYBEDEFEND_API_KEY }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }} --region ${{ vars.CYBEDEFEND_REGION }} --branch ${{ github.ref_name }}
+        run: cybedefend scan --dir ./ --ci --pat ${{ secrets.CYBEDEFEND_PAT }} --project-id ${{ secrets.CYBEDEFEND_PROJECT_ID }} --region ${{ vars.CYBEDEFEND_REGION }} --branch ${{ github.ref_name }}
 ```
 
 ### GitLab CI
@@ -439,7 +444,7 @@ stages:
   - security-scan
 
 variables:
-  CYBEDEFEND_CLI_VERSION: "v1.0.9"
+  CYBEDEFEND_CLI_VERSION: "v1.1.0"
   CYBEDEFEND_CLI_BINARY: "cybedefend-linux-amd64"
   CYBEDEFEND_REGION: "eu"  # or "us"
 
@@ -466,7 +471,7 @@ security_scan:
       cybedefend scan
       --dir .
       --ci
-      --api-key "${CYBEDEFEND_API_KEY}"
+      --pat "${CYBEDEFEND_PAT}"
       --project-id "${CYBEDEFEND_PROJECT_ID}"
       --region "${CYBEDEFEND_REGION}"
       --branch "${CI_COMMIT_BRANCH}"
@@ -475,7 +480,7 @@ security_scan:
       when: on_success
 ```
 
-> **Note:** Store `CYBEDEFEND_API_KEY` and `CYBEDEFEND_PROJECT_ID` as protected CI/CD variables in your GitLab project settings.
+> **Note:** Store `CYBEDEFEND_PAT` and `CYBEDEFEND_PROJECT_ID` as protected CI/CD variables in your GitLab project settings.
 
 ---
 

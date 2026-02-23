@@ -49,7 +49,11 @@ func (c *Client) GetResults(projectID, resultType string, page, limit int) (*Sca
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

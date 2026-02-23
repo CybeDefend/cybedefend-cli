@@ -92,7 +92,11 @@ func (c *Client) StartScan(projectID, filePath, branch string) (*StartScanRespon
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	if branch != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -232,7 +236,11 @@ func (c *Client) GetScanStatus(projectID, scanID string) (*ScanStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -325,7 +333,11 @@ func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severi
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("x-api-key", c.APIKey)
+	token, err := c.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("authentication error: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

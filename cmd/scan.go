@@ -33,7 +33,7 @@ var scanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Start a new scan",
 	Run: func(cmd *cobra.Command, args []string) {
-		apiKey := viper.GetString("api_key")
+		pat := viper.GetString("pat")
 		apiURL := viper.GetString("api_url")
 
 		// Initialize GitHub Summary Writer only in CI mode
@@ -53,7 +53,7 @@ var scanCmd = &cobra.Command{
 			}
 		}
 
-		if err := validateScanRequirements(apiKey, projectIDScan); err != nil {
+		if err := validateScanRequirements(pat, projectIDScan); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -69,7 +69,7 @@ var scanCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		client := api.NewClient(apiURL, apiKey)
+		client := api.NewClient(apiURL, pat, config.LogtoEndpoint, config.LogtoClientID)
 		scanID, err := executeScan(client, projectIDScan, zipPath, scanBranch)
 		if err != nil {
 			logger.Error("Error starting scan: %v", err)
@@ -98,10 +98,10 @@ var scanCmd = &cobra.Command{
 	},
 }
 
-// validateScanRequirements checks if API key and project ID are provided
-func validateScanRequirements(apiKey, projectID string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API Key is required. Use --api-key flag, set CYBEDEFEND_API_KEY environment variable, or specify in config file")
+// validateScanRequirements checks if PAT and project ID are provided
+func validateScanRequirements(pat, projectID string) error {
+	if pat == "" {
+		return fmt.Errorf("authentication required: provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file. Create one at Account Settings → Personal Access Tokens")
 	}
 	if projectID == "" {
 		return fmt.Errorf("Project ID is required. Use --project-id flag, set CYBEDEFEND_PROJECT_ID environment variable, or specify in config file")
