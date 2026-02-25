@@ -23,6 +23,7 @@ var (
 	outputFile       string // file name
 	outputPath       string // file path
 	allResults       bool   // fetch all results
+	resultsBranch    string // branch filter
 )
 
 var resultsCmd = &cobra.Command{
@@ -39,6 +40,7 @@ func init() {
 	resultsCmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json, html, sarif)")
 	resultsCmd.Flags().StringVarP(&outputFile, "filename", "f", "results.json", "Output file name")
 	resultsCmd.Flags().StringVar(&outputPath, "filepath", ".", "Output file path")
+	resultsCmd.Flags().StringVarP(&resultsBranch, "branch", "b", "", "Branch to fetch results for (default: all branches)")
 }
 
 func executeResultsCommand(cmd *cobra.Command, args []string) {
@@ -50,7 +52,11 @@ func executeResultsCommand(cmd *cobra.Command, args []string) {
 	// Adjust output file extensions based on format
 	setOutputFileDefaults()
 
-	logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
+	if resultsBranch != "" {
+		logger.Info("Fetching results for project %s, type %s, branch %s", projectIDResults, resultType, resultsBranch)
+	} else {
+		logger.Info("Fetching results for project %s, type %s", projectIDResults, resultType)
+	}
 
 	// Create the client and fetch results
 	client := newClientFromConfig()
@@ -118,7 +124,7 @@ func setOutputFileDefaults() {
 }
 
 func fetchResults(client *api.Client, page int) *api.ScanResults {
-	results, err := client.GetResults(projectIDResults, resultType, page, 20)
+	results, err := client.GetResults(projectIDResults, resultType, page, 20, resultsBranch)
 	if err != nil {
 		logger.Error("Error fetching results: %v", err)
 		os.Exit(1)
@@ -131,7 +137,7 @@ func fetchResults(client *api.Client, page int) *api.ScanResults {
 
 	if page > results.TotalPages {
 		logger.Warn("Requested page %d exceeds total pages (%d). Fetching last page instead.", page, results.TotalPages)
-		results, err = client.GetResults(projectIDResults, resultType, results.TotalPages, 20)
+		results, err = client.GetResults(projectIDResults, resultType, results.TotalPages, 20, resultsBranch)
 		if err != nil {
 			logger.Error("Error fetching last page: %v", err)
 			os.Exit(1)
@@ -149,7 +155,7 @@ func fetchAllResults(client *api.Client) *api.ScanResults {
 
 	for {
 		logger.Info("Fetching page %d...", page)
-		results, err := client.GetResults(projectIDResults, resultType, page, 100)
+		results, err := client.GetResults(projectIDResults, resultType, page, 100, resultsBranch)
 		if err != nil {
 			logger.Error("Error fetching page %d: %v", page, err)
 			os.Exit(1)
