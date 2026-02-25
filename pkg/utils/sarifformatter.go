@@ -102,11 +102,31 @@ func ConvertToSARIF(report VulnerabilityReport, outputFilePath string) error {
 func mapVulnerabilitiesToSarifResults(vulnerabilities []Vulnerability) []SarifResult {
 	var results []SarifResult
 	for _, v := range vulnerabilities {
+		// Use the vulnerability name as ruleId (falling back to instance ID if empty).
+		ruleID := v.Name
+		if ruleID == "" {
+			ruleID = v.ID
+		}
+		// Build a descriptive message: name + description.
+		msgText := v.Description
+		if v.Name != "" && v.Description != "" {
+			msgText = v.Name + ": " + v.Description
+		} else if v.Name != "" {
+			msgText = v.Name
+		}
+		startLine := v.VulnerableStartLine
+		if startLine == 0 {
+			startLine = 1
+		}
+		endLine := v.VulnerableEndLine
+		if endLine == 0 {
+			endLine = startLine
+		}
 		results = append(results, SarifResult{
-			RuleID: v.ID,
+			RuleID: ruleID,
 			Level:  mapSeverityToLevel(v.Severity),
 			Message: SarifMessage{
-				Text: v.Description,
+				Text: msgText,
 			},
 			Locations: []SarifLocation{
 				{
@@ -115,8 +135,8 @@ func mapVulnerabilitiesToSarifResults(vulnerabilities []Vulnerability) []SarifRe
 							URI: v.Path,
 						},
 						Region: SarifRegion{
-							StartLine: v.VulnerableStartLine,
-							EndLine:   v.VulnerableEndLine,
+							StartLine: startLine,
+							EndLine:   endLine,
 						},
 					},
 				},

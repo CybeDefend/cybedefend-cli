@@ -19,7 +19,7 @@ var (
 	projectIDResults string
 	resultType       string // sast | sca | iac | secret | cicd | container | all
 	page             int
-	outputFormat     string // json | html | sarif
+	outputFormat     string // json | html | sarif | markdown
 	outputFile       string
 	outputPath       string
 	allResults       bool
@@ -38,7 +38,7 @@ func init() {
 	resultsCmd.Flags().StringVarP(&resultType, "type", "t", "all", "Scan type (sast, sca, iac, secret, cicd, container, all)")
 	resultsCmd.Flags().IntVarP(&page, "page", "p", 1, "Page number to fetch")
 	resultsCmd.Flags().BoolVarP(&allResults, "all", "a", true, "Fetch all pages")
-	resultsCmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json, html, sarif)")
+	resultsCmd.Flags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json, html, sarif, markdown)")
 	resultsCmd.Flags().StringVarP(&outputFile, "filename", "f", "results.json", "Output file name")
 	resultsCmd.Flags().StringVar(&outputPath, "filepath", ".", "Output file path")
 	resultsCmd.Flags().StringVarP(&resultsBranch, "branch", "b", "", "Branch to filter results (default: all branches)")
@@ -95,9 +95,18 @@ func executeStandardResults(client *api.Client) {
 	outputResults(results)
 }
 
+// isForbiddenError returns true when the API returned HTTP 403.
+func isForbiddenError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "API error 403")
+}
+
 func fetchOnePage(client *api.Client, scanType string, pg int) *api.ScanResults {
 	results, err := client.GetResults(projectIDResults, scanType, pg, 20, resultsBranch)
 	if err != nil {
+		if isForbiddenError(err) {
+			logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
+			os.Exit(1)
+		}
 		logger.Error("Error fetching results: %v", err)
 		os.Exit(1)
 	}
@@ -123,6 +132,10 @@ func fetchAllPages(client *api.Client, scanType string) *api.ScanResults {
 		logger.Info("Fetching page %d...", pg)
 		res, err := client.GetResults(projectIDResults, scanType, pg, 100, resultsBranch)
 		if err != nil {
+			if isForbiddenError(err) {
+				logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
+				os.Exit(1)
+			}
 			logger.Error("Error fetching page %d: %v", pg, err)
 			os.Exit(1)
 		}
@@ -173,8 +186,9 @@ func executeGroupedResults(client *api.Client) {
 		combined = res
 	}
 
-	writeJSONAny(combined, filepath.Join(outputPath, outputFile))
-	logger.Success("Results saved successfully to %s", filepath.Join(outputPath, outputFile))
+	outFilePath := resolveOutputFilePath()
+	writeJSONAny(combined, outFilePath)
+	logger.Success("Results saved successfully to %s", outFilePath)
 }
 
 func fetchAllGroupedPages(client *api.Client) *api.GroupedScanResults {
@@ -237,8 +251,9 @@ func executeContainerGroupedResults(client *api.Client) {
 		combined = res
 	}
 
-	writeJSONAny(combined, filepath.Join(outputPath, outputFile))
-	logger.Success("Results saved successfully to %s", filepath.Join(outputPath, outputFile))
+	outFilePath := resolveOutputFilePath()
+	writeJSONAny(combined, outFilePath)
+	logger.Success("Results saved successfully to %s", outFilePath)
 }
 
 func fetchAllContainerGroupedPages(client *api.Client) *api.ContainerGroupedResults {
@@ -274,11 +289,6 @@ func fetchAllContainerGroupedPages(client *api.Client) *api.ContainerGroupedResu
 var allScanTypes = []string{"sast", "sca", "iac", "secret", "cicd", "container"}
 
 func executeAllTypesResults(client *api.Client) {
-	if outputFormat != "json" {
-		logger.Error("'all' type only supports JSON output (--output json).")
-		os.Exit(1)
-	}
-
 	logger.Info("Fetching all scan types for project %s", projectIDResults)
 
 	combined := &api.AllScanResults{
@@ -313,8 +323,37 @@ func executeAllTypesResults(client *api.Client) {
 		time.Sleep(300 * time.Millisecond)
 	}
 
-	writeJSONAny(combined, filepath.Join(outputPath, outputFile))
-	logger.Success("Results saved successfully to %s", filepath.Join(outputPath, outputFile))
+	outFilePath := resolveOutputFilePath()
+	if outputFormat == "json" {
+		// JSON: preserve the typed per-category structure.
+		writeJSONAny(combined, outFilePath)
+	} else {
+		// HTML / SARIF / Markdown: flatten all categories into one ScanResults.
+		flat := allResultsToScanResults(combined)
+		outputResults(flat)
+		return
+	}
+	logger.Success("Results saved successfully to %s", outFilePath)
+}
+
+// allResultsToScanResults flattens an AllScanResults into a single ScanResults
+// for use with formatters that expect a flat list.
+func allResultsToScanResults(a *api.AllScanResults) *api.ScanResults {
+	var all []api.Vulnerability
+	all = append(all, a.SAST...)
+	all = append(all, a.SCA...)
+	all = append(all, a.IAC...)
+	all = append(all, a.Secret...)
+	all = append(all, a.CICD...)
+	all = append(all, a.Container...)
+	return &api.ScanResults{
+		ProjectID:       a.ProjectID,
+		ProjectName:     a.ProjectName,
+		Page:            1,
+		TotalPages:      1,
+		Total:           len(all),
+		Vulnerabilities: all,
+	}
 }
 
 func fetchAllPagesForType(client *api.Client, scanType string) *api.ScanResults {
@@ -324,6 +363,10 @@ func fetchAllPagesForType(client *api.Client, scanType string) *api.ScanResults 
 	for pg := 1; ; pg++ {
 		res, err := client.GetResults(projectIDResults, scanType, pg, 100, resultsBranch)
 		if err != nil {
+			if isForbiddenError(err) {
+				logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
+				os.Exit(1)
+			}
 			logger.Warn("Could not fetch %s results (page %d): %v", scanType, pg, err)
 			break
 		}
@@ -360,8 +403,8 @@ func validateInputs(pat string) {
 		}
 	}
 
-	if outputFormat != "json" && outputFormat != "html" && outputFormat != "sarif" {
-		logger.Error("Invalid output format: %s. Use 'json', 'html', or 'sarif'.", outputFormat)
+	if outputFormat != "json" && outputFormat != "html" && outputFormat != "sarif" && outputFormat != "markdown" {
+		logger.Error("Invalid output format: %s. Use 'json', 'html', 'sarif', or 'markdown'.", outputFormat)
 		os.Exit(1)
 	}
 
@@ -398,6 +441,10 @@ func setOutputFileDefaults() {
 		if filepath.Ext(outputFile) != ".json" {
 			outputFile = "results.json"
 		}
+	case "markdown":
+		if filepath.Ext(outputFile) != ".md" {
+			outputFile = "results.md"
+		}
 	}
 }
 
@@ -405,8 +452,18 @@ func setOutputFileDefaults() {
 // Output writers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// resolveOutputFilePath returns the full output path.
+// If -f was given as an absolute path, use it directly.
+// Otherwise join --filepath + --filename.
+func resolveOutputFilePath() string {
+	if filepath.IsAbs(outputFile) {
+		return outputFile
+	}
+	return filepath.Join(outputPath, outputFile)
+}
+
 func outputResults(results *api.ScanResults) {
-	outputFilePath := filepath.Join(outputPath, outputFile)
+	outputFilePath := resolveOutputFilePath()
 	switch outputFormat {
 	case "json":
 		writeJSONAny(results, outputFilePath)
@@ -414,6 +471,8 @@ func outputResults(results *api.ScanResults) {
 		writeHTMLOutput(results, outputFilePath)
 	case "sarif":
 		writeSARIFOutput(results, outputFilePath)
+	case "markdown":
+		writeMarkdownOutput(results, outputFilePath)
 	default:
 		logger.Error("Unsupported output format: %s.", outputFormat)
 		os.Exit(1)
@@ -437,14 +496,15 @@ func writeJSONAny(v any, filePath string) {
 }
 
 func writeHTMLOutput(results *api.ScanResults, filePath string) {
+	vulns := mapVulnerabilities(results.Vulnerabilities)
 	report := utils.VulnerabilityReport{
 		ProjectName:       results.ProjectName,
 		ProjectID:         results.ProjectID,
-		Total:             results.Total,
+		Total:             len(vulns),
 		Page:              results.Page,
 		TotalPages:        results.TotalPages,
 		Severity:          results.Severity,
-		Vulnerabilities:   mapVulnerabilities(results.Vulnerabilities),
+		Vulnerabilities:   vulns,
 		VulnerabilityType: resultType,
 	}
 	if err := utils.RenderHTMLReport(report, filePath); err != nil {
@@ -454,14 +514,15 @@ func writeHTMLOutput(results *api.ScanResults, filePath string) {
 }
 
 func writeSARIFOutput(results *api.ScanResults, filePath string) {
+	vulns := mapVulnerabilities(results.Vulnerabilities)
 	report := utils.VulnerabilityReport{
 		ProjectName:       results.ProjectName,
 		ProjectID:         results.ProjectID,
-		Total:             results.Total,
+		Total:             len(vulns),
 		Page:              results.Page,
 		TotalPages:        results.TotalPages,
 		Severity:          results.Severity,
-		Vulnerabilities:   mapVulnerabilities(results.Vulnerabilities),
+		Vulnerabilities:   vulns,
 		VulnerabilityType: resultType,
 	}
 	if err := utils.ConvertToSARIF(report, filePath); err != nil {
@@ -470,9 +531,31 @@ func writeSARIFOutput(results *api.ScanResults, filePath string) {
 	}
 }
 
+func writeMarkdownOutput(results *api.ScanResults, filePath string) {
+	vulns := mapVulnerabilities(results.Vulnerabilities)
+	report := utils.VulnerabilityReport{
+		ProjectName:       results.ProjectName,
+		ProjectID:         results.ProjectID,
+		Total:             len(vulns),
+		Page:              results.Page,
+		TotalPages:        results.TotalPages,
+		Severity:          results.Severity,
+		Vulnerabilities:   vulns,
+		VulnerabilityType: resultType,
+	}
+	if err := utils.RenderMarkdownReport(report, filePath); err != nil {
+		logger.Error("Error generating Markdown report: %v", err)
+		os.Exit(1)
+	}
+}
+
 func mapVulnerabilities(apiVulns []api.Vulnerability) []utils.Vulnerability {
 	var out []utils.Vulnerability
 	for _, v := range apiVulns {
+		// Skip truly empty entries (no ID and no name) — these are API placeholders.
+		if v.ID == "" && v.Details.Name == "" {
+			continue
+		}
 		out = append(out, utils.Vulnerability{
 			ID:                  v.ID,
 			Name:                v.Details.Name,

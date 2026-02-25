@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // ValidScanTypes lists all accepted scan type values.
@@ -75,11 +76,15 @@ type apiScanResults struct {
 }
 
 type apiVulnerabilityWrapper struct {
-	Base apiVulnerabilityBase `json:"base"`
+	Base           apiVulnerabilityBase `json:"base"`
+	AutofixRecords []scaAutofixRecord   `json:"autofixRecords"`
+	Library        *scaLibrary          `json:"library,omitempty"`
+	Metadata       *scaMetadata         `json:"metadata,omitempty"`
 }
 
 type apiVulnerabilityBase struct {
 	ID                  string               `json:"id"`
+	CurrentSeverity     string               `json:"currentSeverity"`
 	Language            string               `json:"language"`
 	Path                string               `json:"path"`
 	VulnerableStartLine int                  `json:"vulnerableStartLine"`
@@ -88,42 +93,81 @@ type apiVulnerabilityBase struct {
 	Branch              string               `json:"branch"`
 }
 
+// scaAutofixRecord is the per-package autofix suggestion returned by the SCA endpoint.
+type scaAutofixRecord struct {
+	CveID                      string `json:"cveId"`
+	VulnerablePackage          string `json:"vulnerablePackage"`
+	VulnerableVersion          string `json:"vulnerableVersion"`
+	RecommendedProposedVersion string `json:"recommendedProposedVersion"`
+	InstallCommand             string `json:"installCommand"`
+	HasFixAvailable            bool   `json:"hasFixAvailable"`
+}
+
+// scaLibrary holds the dependency (library) information for SCA findings.
+type scaLibrary struct {
+	PackageName    string   `json:"packageName"`
+	PackageVersion string   `json:"packageVersion"`
+	FileName       string   `json:"fileName"`
+	Ecosystem      string   `json:"ecosystem"`
+	Path           []string `json:"path"`
+}
+
+// scaMetadataCWE is a single CWE entry inside SCA metadata.
+type scaMetadataCWE struct {
+	CweID string `json:"cweId"`
+}
+
+// scaMetadataAlias is a single alias (CVE, etc.) inside SCA metadata.
+type scaMetadataAlias struct {
+	Alias string `json:"alias"`
+}
+
+// scaMetadata is the vulnerability advisory metadata for SCA findings.
+type scaMetadata struct {
+	GHSAID  string             `json:"ghsaId"`
+	CVE     string             `json:"cve"`
+	Summary string             `json:"summary"`
+	Details string             `json:"details"`
+	CWEs    []scaMetadataCWE   `json:"cwes"`
+	Aliases []scaMetadataAlias `json:"aliases"`
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Grouped results (sast/iac/sca/secret/cicd)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // GroupedScanResults is the response from /results/{type}/grouped endpoints.
 type GroupedScanResults struct {
-	ProjectID            string               `json:"projectId"`
-	ProjectName          string               `json:"projectName"`
-	Page                 int                  `json:"page"`
-	Limit                int                  `json:"limit"`
-	TotalPages           int                  `json:"totalPages"`
-	Total                int                  `json:"total"`
-	TotalOccurrences     int                  `json:"totalOccurrences"`
-	Sort                 string               `json:"sort"`
-	Order                string               `json:"order"`
-	Severity             []string             `json:"severity"`
-	Status               []string             `json:"status"`
-	Priority             []string             `json:"priority"`
+	ProjectID              string                 `json:"projectId"`
+	ProjectName            string                 `json:"projectName"`
+	Page                   int                    `json:"page"`
+	Limit                  int                    `json:"limit"`
+	TotalPages             int                    `json:"totalPages"`
+	Total                  int                    `json:"total"`
+	TotalOccurrences       int                    `json:"totalOccurrences"`
+	Sort                   string                 `json:"sort"`
+	Order                  string                 `json:"order"`
+	Severity               []string               `json:"severity"`
+	Status                 []string               `json:"status"`
+	Priority               []string               `json:"priority"`
 	GroupedVulnerabilities []GroupedVulnerability `json:"groupedVulnerabilities"`
 }
 
 // GroupedVulnerability is one rule/CVE group returned by a grouped endpoint.
 type GroupedVulnerability struct {
-	RuleID            string               `json:"ruleId,omitempty"`
-	CveID             string               `json:"cveId,omitempty"`
-	PackageName       string               `json:"packageName,omitempty"`
-	OccurrenceCount   int                  `json:"occurrenceCount"`
-	SeverityBreakdown SeverityBreakdown    `json:"severityBreakdown"`
-	HighestSeverity   string               `json:"highestSeverity"`
-	HighestCvss       float64              `json:"highestCvss,omitempty"`
-	Language          string               `json:"language,omitempty"`
-	Occurrences       []GroupedOccurrence  `json:"occurrences"`
-	HasAutofix        bool                 `json:"hasAutofix"`
-	FirstSeen         string               `json:"firstSeen"`
-	LastSeen          string               `json:"lastSeen"`
-	Vulnerability     json.RawMessage      `json:"vulnerability,omitempty"`
+	RuleID            string              `json:"ruleId,omitempty"`
+	CveID             string              `json:"cveId,omitempty"`
+	PackageName       string              `json:"packageName,omitempty"`
+	OccurrenceCount   int                 `json:"occurrenceCount"`
+	SeverityBreakdown SeverityBreakdown   `json:"severityBreakdown"`
+	HighestSeverity   string              `json:"highestSeverity"`
+	HighestCvss       float64             `json:"highestCvss,omitempty"`
+	Language          string              `json:"language,omitempty"`
+	Occurrences       []GroupedOccurrence `json:"occurrences"`
+	HasAutofix        bool                `json:"hasAutofix"`
+	FirstSeen         string              `json:"firstSeen"`
+	LastSeen          string              `json:"lastSeen"`
+	Vulnerability     json.RawMessage     `json:"vulnerability,omitempty"`
 }
 
 // SeverityBreakdown holds per-level counts inside a grouped vulnerability.
@@ -168,15 +212,15 @@ type ContainerGroupedResults struct {
 
 // ContainerImage is a single repository entry within grouped container results.
 type ContainerImage struct {
-	RepositoryName        string            `json:"repositoryName"`
-	ProjectID             string            `json:"projectId"`
-	OsFamily              string            `json:"osFamily"`
-	OsName                string            `json:"osName"`
-	Branch                string            `json:"branch"`
-	TagCount              int               `json:"tagCount"`
-	Tags                  []ContainerTag    `json:"tags"`
-	AggregatedVulnCounts  VulnCounts        `json:"aggregatedVulnCounts"`
-	LatestScanAt          string            `json:"latestScanAt"`
+	RepositoryName       string         `json:"repositoryName"`
+	ProjectID            string         `json:"projectId"`
+	OsFamily             string         `json:"osFamily"`
+	OsName               string         `json:"osName"`
+	Branch               string         `json:"branch"`
+	TagCount             int            `json:"tagCount"`
+	Tags                 []ContainerTag `json:"tags"`
+	AggregatedVulnCounts VulnCounts     `json:"aggregatedVulnCounts"`
+	LatestScanAt         string         `json:"latestScanAt"`
 }
 
 // ContainerTag is a single image tag within a container repository.
@@ -236,7 +280,7 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 
 	vulns := make([]Vulnerability, 0, len(apiResp.Vulnerabilities))
 	for _, w := range apiResp.Vulnerabilities {
-		vulns = append(vulns, Vulnerability{
+		v := Vulnerability{
 			ID:                  w.Base.ID,
 			Language:            w.Base.Language,
 			Path:                w.Base.Path,
@@ -244,7 +288,31 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 			VulnerableEndLine:   w.Base.VulnerableEndLine,
 			Details:             w.Base.Details,
 			Branch:              w.Base.Branch,
-		})
+		}
+		// For SCA findings: base.vulnerability is null; populate from metadata/library.
+		if v.Details.Name == "" && w.Metadata != nil {
+			v.Details.Name = w.Metadata.Summary
+			if v.Details.Name == "" {
+				v.Details.Name = w.Metadata.GHSAID
+			}
+			v.Details.Description = w.Metadata.Details
+			v.Details.Severity = strings.ToUpper(w.Base.CurrentSeverity)
+			for _, c := range w.Metadata.CWEs {
+				v.Details.CWE = append(v.Details.CWE, c.CweID)
+			}
+			if w.Library != nil {
+				v.Language = w.Library.Ecosystem
+				v.Path = w.Library.PackageName + "@" + w.Library.PackageVersion
+			}
+			// HowToPrevent: use autofix install command when available.
+			if len(w.AutofixRecords) > 0 && w.AutofixRecords[0].InstallCommand != "" {
+				v.Details.HowToPrevent = "Run: `" + w.AutofixRecords[0].InstallCommand + "`"
+			} else if len(w.AutofixRecords) > 0 && w.AutofixRecords[0].RecommendedProposedVersion != "" {
+				v.Details.HowToPrevent = "Update " + w.AutofixRecords[0].VulnerablePackage +
+					" to version " + w.AutofixRecords[0].RecommendedProposedVersion + " or later."
+			}
+		}
+		vulns = append(vulns, v)
 	}
 
 	return &ScanResults{
