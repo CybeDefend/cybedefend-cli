@@ -11,6 +11,7 @@ The **CybeDefend CLI** is a command-line interface tool for interacting with the
 ## Features
 
 - Start a new security scan by uploading files or directories.
+- **Container image scanning**: Scan images from GitLab, GitHub (GHCR), DockerHub, GCR, ECR, ACR, Quay, Harbor, and JFrog registries.
 - Retrieve detailed scan results in multiple formats.
 - **Policy Evaluation & Break Build**: Automatically enforce security policies and break builds based on policy violations.
 - Cross-platform support: Linux, macOS, and Windows.
@@ -322,6 +323,79 @@ By default, the command fetches results in `json` format for the `sast` type and
    ```bash
    cybedefend results --project-id your-project-id --ci
    ```
+
+---
+
+### `container scan`
+
+The `container scan` command starts a container image vulnerability scan for an image hosted on a supported registry. You select the registry with a subcommand and point the CLI at the image to scan.
+
+#### Syntax
+
+```bash
+cybedefend container scan <registry> [flags]
+```
+
+#### Supported Registries
+
+| Subcommand  | Registry                                   | Credential required |
+|-------------|--------------------------------------------|---------------------|
+| `gitlab`    | GitLab Container Registry                  | Yes                 |
+| `github`    | GitHub Container Registry (GHCR)           | No                  |
+| `dockerhub` | DockerHub                                  | Yes                 |
+| `gcr`       | Google Container Registry (GCR)            | Yes                 |
+| `ecr`       | Amazon Elastic Container Registry (ECR)    | Yes                 |
+| `acr`       | Azure Container Registry (ACR)             | Yes                 |
+| `quay`      | Quay.io                                    | Yes                 |
+| `harbor`    | Harbor                                     | Yes                 |
+| `jfrog`     | JFrog Artifactory                          | Yes                 |
+
+#### Flags
+
+- `--image`: Image name with tag, e.g. `my-app:v1.0.0`. **(required)**
+- `--credential-id`: ID of the registry credential configured in the CybeDefend platform (used to authenticate against the registry). **Required for every registry except `github`** (which can scan public GHCR images without one).
+- `--project-id`: Project ID for the scan. If not provided, the value from the configuration file or environment variables is used.
+- `--branch`: Branch name to associate the scan with (for tracking history across branches).
+- `--private`: Mark the scan results as private.
+- `--severities`: Comma-separated list of severities to report, e.g. `CRITICAL,HIGH`. Values are case-insensitive.
+
+> ℹ️ The `--credential-id` refers to a registry integration credential created in the CybeDefend platform, **not** your CLI login or PAT. Create it under your project's integration settings before launching a scan against a private registry.
+
+On success, the command prints a JSON response containing the started scan's ID (`scanId`) and any detected languages.
+
+#### Examples
+
+1. Scan a public image from GitHub Container Registry (no credential needed):
+   ```bash
+   cybedefend container scan github --image my-org/my-app:v1.0.0 --project-id your-project-id
+   ```
+
+2. Scan a private DockerHub image (credential required):
+   ```bash
+   cybedefend container scan dockerhub --image my-org/my-app:v1.0.0 --credential-id your-credential-id --project-id your-project-id
+   ```
+
+3. Scan an image from Amazon ECR and associate it with a branch:
+   ```bash
+   cybedefend container scan ecr --image my-app:latest --credential-id your-credential-id --branch main
+   ```
+
+4. Scan an image from Google Container Registry and report only critical and high severities:
+   ```bash
+   cybedefend container scan gcr --image my-app:v1.0.0 --credential-id your-credential-id --severities CRITICAL,HIGH
+   ```
+
+5. Scan an image from GitLab Container Registry with private results:
+   ```bash
+   cybedefend container scan gitlab --image my-app:v1.0.0 --credential-id your-credential-id --private
+   ```
+
+6. Use the EU region (the registry and project must belong to that region):
+   ```bash
+   cybedefend container scan quay --image my-org/my-app:v1.0.0 --credential-id your-credential-id --region eu
+   ```
+
+> 💡 Run `cybedefend container scan <registry> --help` to see all available flags for a given registry.
 
 ---
 
