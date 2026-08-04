@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -156,12 +157,19 @@ const callbackSuccessBody = `
     <h1>Authentication successful</h1>
     <p>You're now logged in. You can close this tab and return to your terminal.</p>`
 
+// callbackErrorBody renders the error card of the local callback page.
+//
+// title and detail can carry the `error` / `error_description` query parameters
+// of http://localhost:9877/callback verbatim. That branch runs before the state
+// check, so any page open in the user's browser can reach it while the login
+// window is open — both values are untrusted and must be HTML-escaped here, at
+// the single point where they enter the markup.
 func callbackErrorBody(title, detail string) string {
 	return fmt.Sprintf(`
     <div class="icon error">✕</div>
     <h1>%s</h1>
     <p>Authentication could not be completed.</p>
-    <div class="detail">%s</div>`, title, detail)
+    <div class="detail">%s</div>`, html.EscapeString(title), html.EscapeString(detail))
 }
 
 

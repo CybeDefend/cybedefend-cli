@@ -3,6 +3,7 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/utils"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -205,10 +206,17 @@ var reportBatchCmd = &cobra.Command{
 		}
 
 		if output == "" {
+			output = fmt.Sprintf("batch-%s.%s", reportType, format)
+			// suggestedFilename comes from the API response body: it is
+			// untrusted input used as a write path. Keep the bare file name
+			// only, never a directory component, never an absolute path.
 			if suggestedFilename != "" {
-				output = suggestedFilename
-			} else {
-				output = fmt.Sprintf("batch-%s.%s", reportType, format)
+				safeName, err := utils.SanitizeServerFilename(suggestedFilename)
+				if err != nil {
+					logger.Warn("Ignoring unsafe filename returned by the API (%q): %v", suggestedFilename, err)
+				} else {
+					output = safeName
+				}
 			}
 		}
 

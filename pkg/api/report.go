@@ -231,6 +231,10 @@ type BatchReportResponse struct {
 
 // GetBatchReport generates a report for a manual selection of projects.
 // Returns the decoded report bytes and the suggested filename.
+//
+// The returned filename is chosen by the server and is therefore untrusted: it
+// may contain directory components, "..", or an absolute path. Callers must run
+// it through utils.SanitizeServerFilename before using it as a write path.
 func (c *Client) GetBatchReport(organizationID, reportType, format string, reqBody *BatchReportRequest) ([]byte, string, error) {
 	apiURL := fmt.Sprintf("%s/organization/%s/project/report/batch/%s/%s", c.APIURL, organizationID, reportType, format)
 	logger.Debug("POST %s", apiURL)

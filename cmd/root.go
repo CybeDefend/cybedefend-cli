@@ -19,6 +19,7 @@ var (
 	cfgFile           string
 	config            *utils.Config
 	isUsingConfigFile bool
+	isConfigTrusted   bool
 	region            string
 )
 
@@ -29,7 +30,7 @@ var rootCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Load configuration
 		var err error
-		config, err = utils.LoadConfig()
+		config, err = utils.LoadConfig(cfgFile)
 		if err != nil {
 			return err
 		}
@@ -93,14 +94,7 @@ func init() {
 	rootCmd.PersistentFlags().String("api-key", "", "[DEPRECATED] Use --pat instead")
 	rootCmd.PersistentFlags().MarkHidden("api-key")
 
-	// Bind flags to Viper
-	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
-	viper.BindPFlag("pat", rootCmd.PersistentFlags().Lookup("pat"))
-	viper.BindPFlag("auth_endpoint", rootCmd.PersistentFlags().Lookup("auth-endpoint"))
-	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
-	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
-	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
-	viper.BindPFlag("region", rootCmd.PersistentFlags().Lookup("region"))
+	bindFlagsToViper()
 
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(resultsCmd)
@@ -115,17 +109,35 @@ func init() {
 	rootCmd.AddCommand(logoutCmd)
 }
 
+// bindFlagsToViper wires the persistent flags into viper. Extracted so it can be
+// re-applied after a viper.Reset() in tests.
+func bindFlagsToViper() {
+	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
+	viper.BindPFlag("pat", rootCmd.PersistentFlags().Lookup("pat"))
+	viper.BindPFlag("auth_endpoint", rootCmd.PersistentFlags().Lookup("auth-endpoint"))
+	viper.BindPFlag("api_key", rootCmd.PersistentFlags().Lookup("api-key"))
+	viper.BindPFlag("ci", rootCmd.PersistentFlags().Lookup("ci"))
+	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	viper.BindPFlag("region", rootCmd.PersistentFlags().Lookup("region"))
+}
+
 func initConfig() {
+	viper.SetConfigName("config") // Name of config file (without extension)
+	viper.SetConfigType("yaml")   // REQUIRED if the config file does not have the extension in the name
+	// Kept for project-level settings (project_id, branch, …), but a config file
+	// found here is written by whoever wrote the repository being scanned, so it
+	// is untrusted: utils.EnforceConfigTrustBoundary strips api_url,
+	// auth_endpoint and pat from it below.
+	viper.AddConfigPath(".")                 // Look for config in the current directory
+	viper.AddConfigPath("$HOME/.cybedefend") // Optionally look for config in the user's home directory
+	viper.AddConfigPath("/etc/cybedefend/")  // Optionally look for config in /etc/cybedefend/
+
+	// Must come last: viper.SetConfigName clears any previously set config file,
+	// so setting it earlier made --config silently fall back to path discovery.
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	}
-
-	viper.SetConfigName("config")            // Name of config file (without extension)
-	viper.SetConfigType("yaml")              // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath(".")                 // Look for config in the current directory
-	viper.AddConfigPath("$HOME/.cybedefend") // Optionally look for config in the user's home directory
-	viper.AddConfigPath("/etc/cybedefend/")  // Optionally look for config in /etc/cybedefend/
 
 	// Read in environment variables that match
 	viper.SetEnvPrefix("CYBEDEFEND")
@@ -136,11 +148,20 @@ func initConfig() {
 		isUsingConfigFile = true
 	}
 
-	// Derive API URL from region unless explicitly overridden by flag, env, or config file
-	// api-url flag has priority over region; env CYBEDEFEND_API_URL and config api_url also have priority
+	// Trust boundary: a config file discovered in the working directory must not
+	// be able to redirect the PAT exchange, the API host or supply a token.
+	var neutralized []string
+	isConfigTrusted, neutralized = utils.EnforceConfigTrustBoundary(viper.GetViper(), cfgFile)
+	if len(neutralized) > 0 {
+		logger.Warn("Ignoring %s from untrusted config file %s", strings.Join(neutralized, ", "), viper.ConfigFileUsed())
+		logger.Warn("These settings are only read from $HOME/.cybedefend/config.yaml, /etc/cybedefend/config.yaml, an explicit --config, a flag or a CYBEDEFEND_* environment variable.")
+	}
+
+	// Derive API URL from region unless explicitly overridden by flag, env, or a trusted config file
+	// api-url flag has priority over region; env CYBEDEFEND_API_URL and a trusted config api_url also have priority
 	apiURLFlag := rootCmd.PersistentFlags().Lookup("api-url")
 	_, apiURLEnvSet := os.LookupEnv("CYBEDEFEND_API_URL")
-	apiURLInConfig := viper.InConfig("api_url")
+	apiURLInConfig := isConfigTrusted && viper.InConfig("api_url")
 	if !(apiURLFlag != nil && apiURLFlag.Changed) && !apiURLEnvSet && !apiURLInConfig {
 		r := strings.ToLower(viper.GetString("region"))
 		var derived string

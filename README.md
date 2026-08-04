@@ -114,9 +114,10 @@ If you'd prefer to build the CLI from source, follow these steps:
 ### Configuration File
 
 You can create a `config.yaml` file in one of the following locations:
-- Current directory (`./config.yaml`)
+- Current directory (`./config.yaml`) — **project settings only**, see the trust note below
 - User's home directory (`$HOME/.cybedefend/config.yaml`)
 - System-wide directory (`/etc/cybedefend/config.yaml`)
+- Any path you pass explicitly with `--config`
 
 Example `config.yaml`:
 ```yaml
@@ -132,6 +133,33 @@ branch: "main" # Optional: default branch for scans
 # auth_endpoint: "https://auth-eu.cybedefend.com"
 # logto_client_id: "cybedefend-cli"
 ```
+
+#### Which settings a project-local config file may set
+
+The CLI is normally run from the root of the repository being scanned
+(`cybedefend scan --dir .`), including in CI on pull requests from forks. A
+`config.yaml` sitting in that directory is therefore written by whoever wrote the
+repository, not necessarily by you.
+
+For that reason `api_url`, `auth_endpoint` and `pat` — the settings that decide
+where your Personal Access Token is exchanged, and where your source tree is
+uploaded — are **ignored** when they come from a config file discovered in the
+current directory. The CLI prints a warning and falls back to the region
+defaults when that happens.
+
+Supply them from a source only you control:
+
+| Source | `api_url` / `auth_endpoint` / `pat` | `project_id`, `branch`, `region`, `app_url`, … |
+|---|---|---|
+| `$HOME/.cybedefend/config.yaml` | honoured | honoured |
+| `/etc/cybedefend/config.yaml` | honoured | honoured |
+| `--config <path>` (explicit) | honoured | honoured |
+| `--pat` / `--api-url` / `--auth-endpoint` flags | honoured | honoured |
+| `CYBEDEFEND_*` environment variables | honoured | honoured |
+| `./config.yaml` (discovered in the working directory) | **ignored** | honoured |
+
+Committing `project_id` and `branch` to a repository stays fully supported —
+that is what a project-local config file is for.
 
 ### Environment Variables
 
