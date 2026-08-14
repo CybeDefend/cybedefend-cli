@@ -23,6 +23,11 @@ build:
 build-all:
 	@$(SCRIPTS_DIR)/build-all.sh
 
+# Run the test suite
+.PHONY: test
+test:
+	@$(SCRIPTS_DIR)/test.sh
+
 # Clean build artifacts
 .PHONY: clean
 clean:
