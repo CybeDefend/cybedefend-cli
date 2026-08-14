@@ -107,9 +107,42 @@ If you'd prefer to build the CLI from source, follow these steps:
    cybedefend --version
    ```
 
+5. Run the test suite (also run in CI on every pull request):
+   ```bash
+   make test
+   ```
+
 ---
 
 ## Configuration
+
+### Authentication
+
+Log in once and every later command reuses the stored credentials:
+
+```bash
+cybedefend login --region eu                      # browser (OAuth), interactive
+cybedefend login --pat pat_xxxxxxxx --region eu   # Personal Access Token, required in CI
+cybedefend logout                                 # remove the stored credentials
+```
+
+Credentials are written to `~/.cybedefend/credentials.json` with `0600` permissions,
+together with the endpoints resolved at login time (API URL, auth endpoint, Logto
+client ID, API resource). Later commands reuse **those** endpoints, so a login against
+a self-hosted or non-production instance stays on that instance.
+
+Credentials are resolved in this order:
+
+1. an explicit `--pat` flag on the command line;
+2. the credentials written by `cybedefend login`;
+3. `CYBEDEFEND_PAT`, or `pat:` in the config file (deprecated).
+
+If both 2 and 3 are set, the CLI uses the login credentials and warns about the
+ambiguity — remove one of the two.
+
+> ⚠️ Because the stored credentials pin the endpoints, `--api-url` and `--region` are
+> ignored once you are logged in; the CLI tells you when that happens. Run
+> `cybedefend logout` and log in again to target another instance or region.
 
 ### Configuration File
 
@@ -120,12 +153,12 @@ You can create a `config.yaml` file in one of the following locations:
 
 Example `config.yaml`:
 ```yaml
-api_url: "https://api-us.cybedefend.com" # default if not overridden
-pat: "pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # Personal Access Token — create in Account Settings → Personal Access Tokens
 project_id: "your-project-id"
 branch: "main" # Optional: default branch for scans
 # Optional: choose region (us/eu). If set, api_url and auth_endpoint will be derived unless overridden.
 # region: "eu"
+# Optional: manual API URL override (takes precedence over region)
+# api_url: "https://api-us.cybedefend.com"
 # Optional: custom app URL for vulnerability links (for self-hosted deployments)
 # app_url: "https://app.example.com"
 # Optional: override auth endpoint (derived from region by default)
@@ -133,22 +166,28 @@ branch: "main" # Optional: default branch for scans
 # logto_client_id: "cybedefend-cli"
 ```
 
+> ⚠️ **`pat:` in `config.yaml` is deprecated** and will be removed in a future release:
+> the config file is world-readable (`0644`), unlike `credentials.json` (`0600`). Use
+> `cybedefend login --pat <PAT>` instead, and revoke any PAT that was left in a config
+> file. A `pat:` still works for now, but only when no `cybedefend login` credentials
+> exist, and the CLI prints a deprecation warning.
+
 ### Environment Variables
 
 The CLI also supports environment variables:
 
 - `CYBEDEFEND_API_URL`: API base URL.
 - `CYBEDEFEND_REGION`: Platform region (`us` or `eu`). Ignored if `CYBEDEFEND_API_URL` is set.
-- `CYBEDEFEND_PAT`: Personal Access Token for authentication.
+- `CYBEDEFEND_PAT`: Personal Access Token for authentication. Ignored when `cybedefend login` credentials exist.
 - `CYBEDEFEND_PROJECT_ID`: Default project ID.
 
 ### Command-Line Flags
 
 You can override configurations using flags:
 
-- `--region`: Platform region to use: `us` (default) or `eu`. If set, it selects `https://api-us.cybedefend.com` or `https://api-eu.cybedefend.com`.
-- `--api-url`: API base URL (manual override; takes precedence over `--region`).
-- `--pat`: Personal Access Token (PAT). Create one in Account Settings → Personal Access Tokens.
+- `--region`: Platform region to use: `us` (default) or `eu`. If set, it selects `https://api-us.cybedefend.com` or `https://api-eu.cybedefend.com`. Ignored once logged in (see [Authentication](#authentication)).
+- `--api-url`: API base URL (manual override; takes precedence over `--region`). Ignored once logged in.
+- `--pat`: Personal Access Token (PAT). Create one in Account Settings → Personal Access Tokens. Takes precedence over stored credentials.
 - `--project-id`: Project ID.
 
 > ⚠️ `--api-key` / `CYBEDEFEND_API_KEY` / `api_key:` are permanently deprecated. API keys issued before the migration return `HTTP 410 Gone`. Migrate to PAT.
