@@ -21,13 +21,35 @@ const (
 )
 
 // Credentials represents stored authentication state.
+//
+// Region is kept for backward compatibility with credentials.json files written
+// by CLI <= v2.0.2, but it is only a label: the endpoints actually used at login
+// time are persisted below and take precedence. Deriving everything from a
+// two-value region enum silently retargeted staging/self-hosted logins to prod US.
 type Credentials struct {
-	Type         AuthType `json:"type"`
-	Region       string   `json:"region"`
-	PAT          string   `json:"pat,omitempty"`
-	AccessToken  string   `json:"access_token,omitempty"`
-	RefreshToken string   `json:"refresh_token,omitempty"`
-	TokenExpiry  string   `json:"token_expiry,omitempty"` // RFC 3339
+	Type   AuthType `json:"type"`
+	Region string   `json:"region"`
+
+	// Endpoints resolved at login time.
+	APIURL       string `json:"api_url,omitempty"`
+	AuthEndpoint string `json:"auth_endpoint,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	APIResource  string `json:"api_resource,omitempty"`
+
+	PAT          string `json:"pat,omitempty"`
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	TokenExpiry  string `json:"token_expiry,omitempty"` // RFC 3339
+}
+
+// Endpoints returns the endpoints captured at login time. ok is false for legacy
+// credentials, or for any incomplete set — callers then fall back on the region
+// so a partial set is never mixed with region defaults.
+func (c *Credentials) Endpoints() (apiURL, authEndpoint, clientID, apiResource string, ok bool) {
+	if c.APIURL == "" || c.AuthEndpoint == "" || c.ClientID == "" || c.APIResource == "" {
+		return "", "", "", "", false
+	}
+	return c.APIURL, c.AuthEndpoint, c.ClientID, c.APIResource, true
 }
 
 // IsAccessTokenValid returns true when the stored OAuth access token has not yet expired.

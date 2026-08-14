@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
-	"cybedefend-cli/pkg/auth"
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
 	"encoding/json"
@@ -50,8 +49,7 @@ func init() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func executeResultsCommand(cmd *cobra.Command, args []string) {
-	pat := viper.GetString("pat")
-	validateInputs(pat)
+	validateInputs()
 	setOutputFileDefaults()
 
 	client := newClientFromConfig()
@@ -386,13 +384,10 @@ func fetchAllPagesForType(client *api.Client, scanType string) *api.ScanResults 
 // Validation & helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-func validateInputs(pat string) {
-	if pat == "" {
-		creds, err := auth.LoadCredentials()
-		if err != nil || creds == nil {
-			logger.Error("authentication required: run 'cybedefend login', or provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file")
-			os.Exit(1)
-		}
+func validateInputs() {
+	if !hasUsableCredentials() {
+		logger.Error("authentication required: run 'cybedefend login', or provide a PAT via --pat flag or CYBEDEFEND_PAT env variable")
+		os.Exit(1)
 	}
 
 	if projectIDResults == "" {

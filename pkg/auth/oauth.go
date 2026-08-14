@@ -164,12 +164,11 @@ func callbackErrorBody(title, detail string) string {
     <div class="detail">%s</div>`, title, detail)
 }
 
-
-//  1. Start local HTTP server on :9877
-//  2. Open browser to authorize URL
-//  3. Wait for callback with code
-//  4. Exchange code for tokens
-//  5. Return tokens
+// 1. Start local HTTP server on :9877
+// 2. Open browser to authorize URL
+// 3. Wait for callback with code
+// 4. Exchange code for tokens
+// 5. Return tokens
 func RunOAuthFlow(authEndpoint, clientID, apiResource string) (*OAuthResult, error) {
 	// Generate PKCE pair
 	codeVerifier, err := generateCodeVerifier()
