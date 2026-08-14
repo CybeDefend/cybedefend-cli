@@ -191,16 +191,26 @@ func (c *Client) resolveOAuthToken() (string, error) {
 	c.tokenExpiry = time.Now().Add(time.Duration(refreshResult.ExpiresIn-30) * time.Second)
 
 	// Persist refreshed credentials so the next CLI invocation uses the new tokens.
-	if c.OAuthRegion != "" {
-		expiry := c.OAuthTokenExpiry.UTC().Format(time.RFC3339)
-		_ = auth.SaveCredentials(&auth.Credentials{
-			Type:         auth.AuthTypeOAuth,
+	// The stored file is updated in place: rebuilding it from the region alone would
+	// drop the endpoints captured at login time and silently retarget the CLI.
+	creds, err := auth.LoadCredentials()
+	if err != nil || creds == nil {
+		if c.OAuthRegion == "" {
+			return c.cachedToken, nil
+		}
+		creds = &auth.Credentials{
 			Region:       c.OAuthRegion,
-			AccessToken:  refreshResult.AccessToken,
-			RefreshToken: c.OAuthRefreshToken,
-			TokenExpiry:  expiry,
-		})
+			APIURL:       c.APIURL,
+			AuthEndpoint: c.AuthEndpoint,
+			ClientID:     c.LogtoClientID,
+			APIResource:  c.APIResource,
+		}
 	}
+	creds.Type = auth.AuthTypeOAuth
+	creds.AccessToken = refreshResult.AccessToken
+	creds.RefreshToken = c.OAuthRefreshToken
+	creds.TokenExpiry = c.OAuthTokenExpiry.UTC().Format(time.RFC3339)
+	_ = auth.SaveCredentials(creds)
 
 	return c.cachedToken, nil
 }

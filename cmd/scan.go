@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/api"
-	"cybedefend-cli/pkg/auth"
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
 	"fmt"
@@ -34,8 +33,6 @@ var scanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Start a new scan",
 	Run: func(cmd *cobra.Command, args []string) {
-		pat := viper.GetString("pat")
-
 		// Initialize GitHub Summary Writer only in CI mode
 		if viper.GetBool("ci") {
 			githubSummary = utils.NewGitHubSummaryWriter()
@@ -53,7 +50,7 @@ var scanCmd = &cobra.Command{
 			}
 		}
 
-		if err := validateScanRequirements(pat, projectIDScan); err != nil {
+		if err := validateScanRequirements(projectIDScan); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -99,13 +96,9 @@ var scanCmd = &cobra.Command{
 }
 
 // validateScanRequirements checks if authentication and project ID are provided
-func validateScanRequirements(pat, projectID string) error {
-	if pat == "" {
-		// Check for stored credentials
-		creds, err := auth.LoadCredentials()
-		if err != nil || creds == nil {
-			return fmt.Errorf("authentication required: run 'cybedefend login', or provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file")
-		}
+func validateScanRequirements(projectID string) error {
+	if !hasUsableCredentials() {
+		return fmt.Errorf("authentication required: run 'cybedefend login', or provide a PAT via --pat flag or CYBEDEFEND_PAT env variable")
 	}
 	if projectID == "" {
 		return fmt.Errorf("Project ID is required. Use --project-id flag, set CYBEDEFEND_PROJECT_ID environment variable, or specify in config file")

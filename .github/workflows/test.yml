@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# The workflow only reads the repository; never inherit the default write scopes.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Vet, Format and Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Go 1.22.2
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22.2'
+
+    - name: Check Formatting
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not gofmt'd:"
+          echo "$unformatted"
+          exit 1
+        fi
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Build
+      run: go build ./...
+
+    - name: Test
+      run: |
+        chmod +x scripts/test.sh
+        make test
