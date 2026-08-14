@@ -6,6 +6,10 @@ on:
       - main
   pull_request:
 
+# The workflow only reads the repository; never inherit the default write scopes.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Vet, Format and Test
