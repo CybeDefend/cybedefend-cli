@@ -100,7 +100,10 @@ func ConvertToSARIF(report VulnerabilityReport, outputFilePath string) error {
 
 // mapVulnerabilitiesToSarifResults maps vulnerabilities to SARIF results.
 func mapVulnerabilitiesToSarifResults(vulnerabilities []Vulnerability) []SarifResult {
-	var results []SarifResult
+	// Non-nil on purpose: a nil slice marshals to `null`, and the SARIF 2.1.0
+	// schema types run.results as an array. A scan with no findings would
+	// otherwise write a report every strict consumer rejects.
+	results := make([]SarifResult, 0, len(vulnerabilities))
 	for _, v := range vulnerabilities {
 		// Use the vulnerability name as ruleId (falling back to instance ID if empty).
 		ruleID := v.Name
