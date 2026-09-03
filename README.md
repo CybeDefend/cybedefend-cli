@@ -155,15 +155,20 @@ Example `config.yaml`:
 ```yaml
 project_id: "your-project-id"
 branch: "main" # Optional: default branch for scans
-# Optional: choose region (us/eu). If set, api_url and auth_endpoint will be derived unless overridden.
-# region: "eu"
-# Optional: manual API URL override (takes precedence over region)
-# api_url: "https://api-us.cybedefend.com"
-# Optional: custom app URL for vulnerability links (for self-hosted deployments)
-# app_url: "https://app.example.com"
-# Optional: override auth endpoint (derived from region by default)
-# auth_endpoint: "https://auth-eu.cybedefend.com"
-# auth_client_id: "cybedefend-cli"
+# On CybeDefend cloud, set region and nothing else: it resolves the API and
+# auth addresses for you, and keeps resolving them if either ever changes.
+# region: "eu"   # us | eu
+#
+# The two settings below are for a self-hosted instance, which has no region
+# to derive an auth address from. Set them together — api_url alone leaves the
+# token exchange pointed at the region's auth server, and every call fails
+# with invalid_grant. Nothing else needs configuring: the client application
+# and the token audience are discovered from api_url.
+# api_url: "https://api.cybedefend.internal"
+# auth_endpoint: "https://auth.cybedefend.internal"
+#
+# Optional: custom app URL for vulnerability links (self-hosted deployments)
+# app_url: "https://app.cybedefend.internal"
 ```
 
 > ⚠️ **`pat:` in `config.yaml` is deprecated** and will be removed in a future release:
