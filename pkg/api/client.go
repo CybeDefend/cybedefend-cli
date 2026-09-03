@@ -13,11 +13,11 @@ import (
 )
 
 type Client struct {
-	APIURL        string
-	PAT           string
-	AuthEndpoint  string
-	LogtoClientID string
-	APIResource   string // sent as `resource` in token exchange (same as APIURL)
+	APIURL       string
+	PAT          string
+	AuthEndpoint string
+	AuthClientID string
+	APIResource  string // sent as `resource` in token exchange (same as APIURL)
 
 	// OAuth fields (set when the user logged in via browser flow)
 	OAuthAccessToken  string
@@ -30,23 +30,23 @@ type Client struct {
 	tokenExpiry time.Time
 }
 
-func NewClient(apiURL, pat, authEndpoint, logtoClientID, logtoAPIResource string) *Client {
+func NewClient(apiURL, pat, authEndpoint, authClientID, authResource string) *Client {
 	return &Client{
-		APIURL:        apiURL,
-		PAT:           pat,
-		AuthEndpoint:  authEndpoint,
-		LogtoClientID: logtoClientID,
-		APIResource:   logtoAPIResource,
+		APIURL:       apiURL,
+		PAT:          pat,
+		AuthEndpoint: authEndpoint,
+		AuthClientID: authClientID,
+		APIResource:  authResource,
 	}
 }
 
 // NewClientWithOAuth creates a Client that uses stored OAuth tokens instead of PAT.
-func NewClientWithOAuth(apiURL, authEndpoint, logtoClientID, logtoAPIResource, accessToken, refreshToken string, tokenExpiry time.Time, region string) *Client {
+func NewClientWithOAuth(apiURL, authEndpoint, authClientID, authResource, accessToken, refreshToken string, tokenExpiry time.Time, region string) *Client {
 	return &Client{
 		APIURL:            apiURL,
 		AuthEndpoint:      authEndpoint,
-		LogtoClientID:     logtoClientID,
-		APIResource:       logtoAPIResource,
+		AuthClientID:      authClientID,
+		APIResource:       authResource,
 		OAuthAccessToken:  accessToken,
 		OAuthRefreshToken: refreshToken,
 		OAuthTokenExpiry:  tokenExpiry,
@@ -71,7 +71,7 @@ func (c *Client) GetAccessToken() (string, error) {
 	return c.exchangeToken()
 }
 
-// exchangeToken performs the Logto PAT → access token exchange.
+// exchangeToken performs the PAT → access token exchange.
 func (c *Client) exchangeToken() (string, error) {
 	if c.PAT == "" {
 		return "", fmt.Errorf("authentication required: provide a PAT via --pat flag, CYBEDEFEND_PAT env variable, or pat field in config file. Create one at Account Settings → Personal Access Tokens")
@@ -80,7 +80,7 @@ func (c *Client) exchangeToken() (string, error) {
 	tokenURL := fmt.Sprintf("%s/oidc/token", strings.TrimRight(c.AuthEndpoint, "/"))
 
 	data := url.Values{}
-	data.Set("client_id", c.LogtoClientID)
+	data.Set("client_id", c.AuthClientID)
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
 	data.Set("subject_token", c.PAT)
 	data.Set("subject_token_type", "urn:logto:token-type:personal_access_token")
@@ -146,7 +146,7 @@ func (c *Client) resolveOAuthToken() (string, error) {
 	tokenURL := fmt.Sprintf("%s/oidc/token", strings.TrimRight(c.AuthEndpoint, "/"))
 
 	data := url.Values{
-		"client_id":     {c.LogtoClientID},
+		"client_id":     {c.AuthClientID},
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {c.OAuthRefreshToken},
 	}
@@ -202,7 +202,7 @@ func (c *Client) resolveOAuthToken() (string, error) {
 			Region:       c.OAuthRegion,
 			APIURL:       c.APIURL,
 			AuthEndpoint: c.AuthEndpoint,
-			ClientID:     c.LogtoClientID,
+			ClientID:     c.AuthClientID,
 			APIResource:  c.APIResource,
 		}
 	}

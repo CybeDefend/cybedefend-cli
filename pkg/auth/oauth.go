@@ -193,7 +193,7 @@ func RunOAuthFlow(authEndpoint, clientID, apiResource string) (*OAuthResult, err
 		"state":                 {state},
 		"code_challenge":        {codeChallenge},
 		"code_challenge_method": {"S256"},
-		"prompt":                {"consent"}, // required for Logto to issue a refresh_token
+		"prompt":                {"consent"}, // required for the identity provider to issue a refresh_token
 	}
 	if apiResource != "" {
 		params.Set("resource", apiResource)
