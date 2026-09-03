@@ -361,9 +361,9 @@ func withUSConfigAndPAT(t *testing.T, pat string) {
 	viper.Set("pat", pat)
 	viper.Set("api_url", utils.APIURLUs)
 	config = &utils.Config{
-		AuthEndpoint:     utils.AuthEndpointUs,
-		LogtoClientID:    utils.LogtoClientIDUs,
-		LogtoAPIResource: utils.APIURLUs,
+		AuthEndpoint: utils.AuthEndpointUs,
+		AuthClientID: utils.AuthClientIDUs,
+		AuthResource: utils.APIURLUs,
 	}
 	t.Cleanup(func() {
 		viper.Set("pat", "")
@@ -381,7 +381,7 @@ func TestNewClientFromConfig_StaleConfigPATDoesNotShadowLogin(t *testing.T) {
 		PAT:          "pat_from_login",
 		APIURL:       utils.APIURLEu,
 		AuthEndpoint: utils.AuthEndpointEu,
-		ClientID:     utils.LogtoClientIDEu,
+		ClientID:     utils.AuthClientIDEu,
 		APIResource:  utils.APIURLEu,
 	}); err != nil {
 		t.Fatalf("SaveCredentials: %v", err)

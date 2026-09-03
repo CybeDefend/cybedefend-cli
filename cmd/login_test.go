@@ -12,17 +12,17 @@ import (
 
 func euConfig() *utils.Config {
 	return &utils.Config{
-		AuthEndpoint:     utils.AuthEndpointEu,
-		LogtoClientID:    utils.LogtoClientIDEu,
-		LogtoAPIResource: utils.APIURLEu,
+		AuthEndpoint: utils.AuthEndpointEu,
+		AuthClientID: utils.AuthClientIDEu,
+		AuthResource: utils.APIURLEu,
 	}
 }
 
 func selfHostedConfig() *utils.Config {
 	return &utils.Config{
-		AuthEndpoint:     "https://auth.self-hosted.example",
-		LogtoClientID:    "self-hosted-client-id",
-		LogtoAPIResource: "https://api.self-hosted.example",
+		AuthEndpoint: "https://auth.self-hosted.example",
+		AuthClientID: "self-hosted-client-id",
+		AuthResource: "https://api.self-hosted.example",
 	}
 }
 
@@ -37,7 +37,7 @@ func TestLoginCredentials_EURegionAndEndpointsArePersisted(t *testing.T) {
 	}
 	if creds.APIURL != utils.APIURLEu ||
 		creds.AuthEndpoint != utils.AuthEndpointEu ||
-		creds.ClientID != utils.LogtoClientIDEu ||
+		creds.ClientID != utils.AuthClientIDEu ||
 		creds.APIResource != utils.APIURLEu {
 		t.Fatalf("the four resolved endpoints must be persisted, got %+v", creds)
 	}
@@ -45,9 +45,9 @@ func TestLoginCredentials_EURegionAndEndpointsArePersisted(t *testing.T) {
 
 func TestLoginCredentials_USRegion(t *testing.T) {
 	cfg := &utils.Config{
-		AuthEndpoint:     utils.AuthEndpointUs,
-		LogtoClientID:    utils.LogtoClientIDUs,
-		LogtoAPIResource: utils.APIURLUs,
+		AuthEndpoint: utils.AuthEndpointUs,
+		AuthClientID: utils.AuthClientIDUs,
+		AuthResource: utils.APIURLUs,
 	}
 
 	creds, err := loginCredentials(auth.AuthTypePAT, utils.APIURLUs, cfg, "us", false)
@@ -103,9 +103,9 @@ func TestLoginCredentials_UnknownEndpointWithExplicitRegion(t *testing.T) {
 
 func TestLoginCredentials_UnknownEndpointWithoutRegionFails(t *testing.T) {
 	creds, err := loginCredentials(auth.AuthTypePAT, "http://localhost:3000", &utils.Config{
-		AuthEndpoint:     "http://localhost:3003",
-		LogtoClientID:    "9koxa107et1i4w8tg9smo",
-		LogtoAPIResource: "http://localhost:3000",
+		AuthEndpoint: "http://localhost:3003",
+		AuthClientID: "9koxa107et1i4w8tg9smo",
+		AuthResource: "http://localhost:3000",
 	}, "us", false)
 
 	if err == nil {
@@ -160,7 +160,7 @@ func TestSelfHostedLoginKeepsFollowingCommandsOnSelfHosted(t *testing.T) {
 		t.Fatalf("expected the self-hosted auth endpoint, got %q", res.AuthEndpoint)
 	}
 	if res.ClientID != "self-hosted-client-id" {
-		t.Fatalf("expected the self-hosted Logto client id, got %q", res.ClientID)
+		t.Fatalf("expected the self-hosted client id, got %q", res.ClientID)
 	}
 }
 

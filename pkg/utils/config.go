@@ -23,9 +23,9 @@ const (
 	AuthEndpointUs = "https://auth-us.cybedefend.com"
 	AuthEndpointEu = "https://auth-eu.cybedefend.com"
 
-	// Fallback Logto application client IDs (used when /client-apps is unreachable).
-	LogtoClientIDUs = "7o6r9cvvi8um0kisvn7hm"
-	LogtoClientIDEu = "fm90ay05zohu8fk2q45ms"
+	// Fallback CLI application client IDs (used when /client-apps is unreachable).
+	AuthClientIDUs = "7o6r9cvvi8um0kisvn7hm"
+	AuthClientIDEu = "fm90ay05zohu8fk2q45ms"
 )
 
 // FetchCLIClientID retrieves the CLI application client ID from the API.
@@ -56,15 +56,15 @@ func FetchCLIClientID(apiURL, fallback string) string {
 }
 
 type Config struct {
-	APIURL           string
-	PAT              string
-	AuthEndpoint     string
-	LogtoClientID    string
-	LogtoAPIResource string // always the real registered API resource (never localhost)
-	ProjectID        string
-	Branch           string
-	CI               bool
-	DEBUG            bool
+	APIURL       string
+	PAT          string
+	AuthEndpoint string
+	AuthClientID string
+	AuthResource string // always the real registered API resource (never localhost)
+	ProjectID    string
+	Branch       string
+	CI           bool
+	DEBUG        bool
 }
 
 func LoadConfig() (*Config, error) {
@@ -93,17 +93,17 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Derive region-aware auth endpoint, client ID and API resource from region (hardcoded, not overridable)
-	var authEndpoint, logtoClientID, logtoAPIResource string
+	var authEndpoint, authClientID, authResource string
 	r := viper.GetString("region")
 	switch r {
 	case "eu":
 		authEndpoint = AuthEndpointEu
-		logtoClientID = FetchCLIClientID(APIURLEu, LogtoClientIDEu)
-		logtoAPIResource = APIURLEu
+		authClientID = FetchCLIClientID(APIURLEu, AuthClientIDEu)
+		authResource = APIURLEu
 	default:
 		authEndpoint = AuthEndpointUs
-		logtoClientID = FetchCLIClientID(APIURLUs, LogtoClientIDUs)
-		logtoAPIResource = APIURLUs
+		authClientID = FetchCLIClientID(APIURLUs, AuthClientIDUs)
+		authResource = APIURLUs
 	}
 	// Allow explicit auth_endpoint override (e.g. self-hosted)
 	if override := viper.GetString("auth_endpoint"); override != "" {
@@ -111,15 +111,15 @@ func LoadConfig() (*Config, error) {
 	}
 
 	config := &Config{
-		APIURL:           viper.GetString("api_url"),
-		PAT:              viper.GetString("pat"),
-		AuthEndpoint:     authEndpoint,
-		LogtoClientID:    logtoClientID,
-		LogtoAPIResource: logtoAPIResource,
-		ProjectID:        viper.GetString("project_id"),
-		Branch:           viper.GetString("branch"),
-		CI:               viper.GetBool("ci"),
-		DEBUG:            viper.GetBool("debug"),
+		APIURL:       viper.GetString("api_url"),
+		PAT:          viper.GetString("pat"),
+		AuthEndpoint: authEndpoint,
+		AuthClientID: authClientID,
+		AuthResource: authResource,
+		ProjectID:    viper.GetString("project_id"),
+		Branch:       viper.GetString("branch"),
+		CI:           viper.GetBool("ci"),
+		DEBUG:        viper.GetBool("debug"),
 	}
 
 	return config, nil

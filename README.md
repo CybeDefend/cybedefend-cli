@@ -16,7 +16,7 @@ The **CybeDefend CLI** is a command-line interface tool for interacting with the
 - **Policy Evaluation & Break Build**: Automatically enforce security policies and break builds based on policy violations.
 - Cross-platform support: Linux, macOS, and Windows.
 - CI/CD-friendly mode with simplified, colorless output.
-- Personal Access Token (PAT) authentication via Logto IAM.
+- Personal Access Token (PAT) authentication.
 - Customizable configurations via flags, environment variables, or configuration files.
 - Designed for use in CI/CD pipelines, Docker containers, and local environments.
 
@@ -127,7 +127,7 @@ cybedefend logout                                 # remove the stored credential
 ```
 
 Credentials are written to `~/.cybedefend/credentials.json` with `0600` permissions,
-together with the endpoints resolved at login time (API URL, auth endpoint, Logto
+together with the endpoints resolved at login time (API URL, auth endpoint, client
 client ID, API resource). Later commands reuse **those** endpoints, so a login against
 a self-hosted or non-production instance stays on that instance.
 
@@ -163,7 +163,7 @@ branch: "main" # Optional: default branch for scans
 # app_url: "https://app.example.com"
 # Optional: override auth endpoint (derived from region by default)
 # auth_endpoint: "https://auth-eu.cybedefend.com"
-# logto_client_id: "cybedefend-cli"
+# auth_client_id: "cybedefend-cli"
 ```
 
 > ⚠️ **`pat:` in `config.yaml` is deprecated** and will be removed in a future release:

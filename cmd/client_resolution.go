@@ -168,8 +168,8 @@ func currentAuthInputs() authInputs {
 	}
 	if config != nil {
 		in.AuthEndpoint = config.AuthEndpoint
-		in.ClientID = config.LogtoClientID
-		in.APIResource = config.LogtoAPIResource
+		in.ClientID = config.AuthClientID
+		in.APIResource = config.AuthResource
 	}
 	// A credentials file that cannot be read is reported, not swallowed: the
 	// alternative is an opaque authentication failure further down.
@@ -206,17 +206,17 @@ func newClientFromConfig() *api.Client {
 
 // newClientFromConfigWithPAT creates an API client using an explicit PAT (used by login --pat).
 func newClientFromConfigWithPAT(pat string) *api.Client {
-	return api.NewClient(viper.GetString("api_url"), pat, config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	return api.NewClient(viper.GetString("api_url"), pat, config.AuthEndpoint, config.AuthClientID, config.AuthResource)
 }
 
-// regionEndpoints returns the API URL, auth endpoint, Logto client ID and API resource
+// regionEndpoints returns the API URL, auth endpoint, client ID and token resource
 // for a given region string ("eu" or anything else → us). Only used as a fallback for
 // credentials.json files written before the endpoints were persisted.
 func regionEndpoints(region string) (apiURL, authEndpoint, clientID, apiResource string) {
 	if strings.EqualFold(region, "eu") {
-		return utils.APIURLEu, utils.AuthEndpointEu, utils.FetchCLIClientID(utils.APIURLEu, utils.LogtoClientIDEu), utils.APIURLEu
+		return utils.APIURLEu, utils.AuthEndpointEu, utils.FetchCLIClientID(utils.APIURLEu, utils.AuthClientIDEu), utils.APIURLEu
 	}
-	return utils.APIURLUs, utils.AuthEndpointUs, utils.FetchCLIClientID(utils.APIURLUs, utils.LogtoClientIDUs), utils.APIURLUs
+	return utils.APIURLUs, utils.AuthEndpointUs, utils.FetchCLIClientID(utils.APIURLUs, utils.AuthClientIDUs), utils.APIURLUs
 }
 
 // hasUsableCredentials reports whether a command can authenticate at all, without

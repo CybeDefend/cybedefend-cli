@@ -94,8 +94,8 @@ func loginCredentials(authType auth.AuthType, apiURL string, cfg *utils.Config, 
 		Region:       region,
 		APIURL:       apiURL,
 		AuthEndpoint: cfg.AuthEndpoint,
-		ClientID:     cfg.LogtoClientID,
-		APIResource:  cfg.LogtoAPIResource,
+		ClientID:     cfg.AuthClientID,
+		APIResource:  cfg.AuthResource,
 	}, nil
 }
 
@@ -154,7 +154,7 @@ func loginWithOAuth() {
 
 	logger.Info("Opening browser for authentication...")
 
-	result, err := auth.RunOAuthFlow(config.AuthEndpoint, config.LogtoClientID, config.LogtoAPIResource)
+	result, err := auth.RunOAuthFlow(config.AuthEndpoint, config.AuthClientID, config.AuthResource)
 	if err != nil {
 		logger.Error("OAuth login failed: %v", err)
 		os.Exit(1)
@@ -170,7 +170,7 @@ func loginWithOAuth() {
 	}
 
 	if result.RefreshToken == "" {
-		logger.Warn("No refresh_token received. Make sure 'offline_access' is enabled for the CLI application in Logto admin.")
+		logger.Warn("No refresh_token received. Make sure 'offline_access' is enabled for the CLI application in the identity provider.")
 	}
 
 	logger.Success("Logged in successfully (OAuth). Credentials saved to ~/.cybedefend/credentials.json")
