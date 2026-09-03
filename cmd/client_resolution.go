@@ -194,7 +194,8 @@ func newClientFromConfig() *api.Client {
 	for _, w := range res.Warnings {
 		logger.Warn("%s", w)
 	}
-	logger.Debug("Auth source: %s — api=%s auth=%s", res.Source, res.APIURL, res.AuthEndpoint)
+	logger.Debug("Auth source: %s — api=%s auth=%s client=%s resource=%s",
+		res.Source, res.APIURL, res.AuthEndpoint, res.ClientID, res.APIResource)
 
 	if res.OAuth != nil {
 		expiry, _ := time.Parse(time.RFC3339, res.OAuth.TokenExpiry)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -77,23 +78,47 @@ func TestLoadConfig_RegionEndpointsAreUnchanged(t *testing.T) {
 	}
 }
 
-// An instance whose /client-apps cannot be reached still has to present its own
-// URL as the resource: the audience of the token is the API being called,
-// discovery or not.
-func TestLoadConfig_ResourceStillFollowsAPIURLWhenDiscoveryFails(t *testing.T) {
+// When discovery fails against an instance that is not one of the two regions,
+// there is no usable identity to fall back to: the regions' client applications
+// belong to the cloud and are unknown to any other deployment. Sending one
+// anyway turned a reachability problem into `invalid_client <the cloud's id>`,
+// which points at the wrong thing entirely. It has to fail, and say why.
+func TestLoadConfig_DiscoveryFailureIsFatalForANonRegionInstance(t *testing.T) {
 	isolateConfig(t)
 	unreachable := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "nope", http.StatusInternalServerError)
+		http.Error(w, "nope", http.StatusForbidden)
 	}))
 	t.Cleanup(unreachable.Close)
 	viper.Set("api_url", unreachable.URL)
 
 	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig returned %v", err)
+	if err == nil {
+		t.Fatalf("expected an error, got a config with client id %q", cfg.AuthClientID)
 	}
-	if cfg.AuthResource != unreachable.URL {
-		t.Errorf("auth resource = %q, want %q", cfg.AuthResource, unreachable.URL)
+	for _, want := range []string{unreachable.URL, "client-apps", "403"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// The two regions keep their built-in client application, so a momentary
+// failure to reach /client-apps on the cloud does not stop a scan.
+func TestRegionFallbackFor(t *testing.T) {
+	for _, tc := range []struct {
+		apiURL string
+		want   string
+		wantOK bool
+	}{
+		{APIURLUs, AuthClientIDUs, true},
+		{APIURLEu, AuthClientIDEu, true},
+		{APIURLUs + "/", AuthClientIDUs, true},
+		{"https://api.self-hosted.example", "", false},
+	} {
+		got, ok := regionFallbackFor(tc.apiURL)
+		if ok != tc.wantOK || got != tc.want {
+			t.Errorf("regionFallbackFor(%q) = (%q, %v), want (%q, %v)", tc.apiURL, got, ok, tc.want, tc.wantOK)
+		}
 	}
 }
 
