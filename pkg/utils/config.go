@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -38,21 +39,24 @@ const (
 // read together, from the API actually being called, rather than derived from
 // the region.
 //
-// ok is false when the instance cannot be reached or advertises no CLI
-// application; the caller then falls back to its own defaults.
-func FetchClientApp(apiURL string) (clientID, resource string, ok bool) {
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(apiURL + "/client-apps")
+// The error says why discovery failed — a status code or a transport error —
+// because the caller has to put it in front of the user: for a deployment that
+// is not one of the two regions there is no identity to fall back to.
+func FetchClientApp(apiURL string) (clientID, resource string, err error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	url := strings.TrimRight(apiURL, "/") + "/client-apps"
+
+	resp, err := client.Get(url)
 	if err != nil {
-		return "", "", false
+		return "", "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", false
+		return "", "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", false
+		return "", "", err
 	}
 	var result struct {
 		CLI struct {
@@ -61,16 +65,37 @@ func FetchClientApp(apiURL string) (clientID, resource string, ok bool) {
 		// Field name chosen by the API, not by us.
 		Resource string `json:"logtoResource"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil || result.CLI.AppID == "" {
-		return "", "", false
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", "", fmt.Errorf("unreadable response: %w", err)
 	}
-	return result.CLI.AppID, result.Resource, true
+	if result.CLI.AppID == "" {
+		return "", "", fmt.Errorf("the response names no CLI application")
+	}
+	return result.CLI.AppID, result.Resource, nil
+}
+
+// regionFallbackFor returns the built-in client application of a region's API
+// URL, so a momentary failure to reach /client-apps on the cloud does not stop
+// a scan.
+//
+// ok is false for every other URL, and deliberately so: these applications are
+// registered with the cloud and are unknown to any other deployment. Sending
+// one anyway reports `invalid_client` naming an id the user never configured,
+// which points at the wrong thing entirely.
+func regionFallbackFor(apiURL string) (clientID string, ok bool) {
+	switch strings.TrimRight(strings.ToLower(strings.TrimSpace(apiURL)), "/") {
+	case APIURLUs:
+		return AuthClientIDUs, true
+	case APIURLEu:
+		return AuthClientIDEu, true
+	}
+	return "", false
 }
 
 // FetchCLIClientID retrieves the CLI application client ID from the API.
 // Falls back to the hardcoded constant if the endpoint is unreachable.
 func FetchCLIClientID(apiURL, fallback string) string {
-	if clientID, _, ok := FetchClientApp(apiURL); ok {
+	if clientID, _, err := FetchClientApp(apiURL); err == nil {
 		return clientID
 	}
 	return fallback
@@ -114,12 +139,12 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// The auth endpoint is the one value the region can speak for.
-	var authEndpoint, fallbackClientID string
+	var authEndpoint string
 	switch viper.GetString("region") {
 	case "eu":
-		authEndpoint, fallbackClientID = AuthEndpointEu, AuthClientIDEu
+		authEndpoint = AuthEndpointEu
 	default:
-		authEndpoint, fallbackClientID = AuthEndpointUs, AuthClientIDUs
+		authEndpoint = AuthEndpointUs
 	}
 	// A deployment that is not one of the two regions has no region to derive an
 	// auth server from, and /client-apps does not advertise one, so an explicit
@@ -136,13 +161,24 @@ func LoadConfig() (*Config, error) {
 	// explicit api_url received the production identity and rejected the
 	// exchange as invalid_grant.
 	authResource := apiURL
-	authClientID, discovered, ok := FetchClientApp(apiURL)
-	if !ok {
-		authClientID = fallbackClientID
-	} else if discovered != "" {
+	authClientID, discovered, discoveryErr := FetchClientApp(apiURL)
+	switch {
+	case discoveryErr == nil:
 		// An instance that names its own resource wins over the URL it was
 		// inferred from.
-		authResource = discovered
+		if discovered != "" {
+			authResource = discovered
+		}
+	default:
+		// Only a region has an identity worth assuming when discovery fails.
+		fallback, ok := regionFallbackFor(apiURL)
+		if !ok {
+			return nil, fmt.Errorf("cannot discover the client application from %s/client-apps: %w\n"+
+				"That is the CybeDefend instance named by api_url. Check that it is reachable from where the CLI "+
+				"runs — a CI runner does not necessarily have the same access as a workstation",
+				strings.TrimRight(apiURL, "/"), discoveryErr)
+		}
+		authClientID = fallback
 	}
 
 	config := &Config{
