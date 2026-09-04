@@ -4,6 +4,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,16 +44,49 @@ const (
 // because the caller has to put it in front of the user: for a deployment that
 // is not one of the two regions there is no identity to fall back to.
 func FetchClientApp(apiURL string) (clientID, resource string, err error) {
-	client := &http.Client{Timeout: 5 * time.Second}
+	for attempt := 1; ; attempt++ {
+		clientID, resource, err = fetchClientAppOnce(apiURL)
+		// A refusal is an answer: retrying a 4xx only delays a failure the user
+		// has to act on. A transport error or a 5xx is worth another try.
+		if err == nil || attempt == clientAppAttempts || !worthRetrying(err) {
+			return clientID, resource, err
+		}
+		time.Sleep(time.Duration(attempt) * clientAppRetryDelay)
+	}
+}
+
+const (
+	// Discovery gates the whole command, and the traffic may cross a VPN, an
+	// exit node or a proxy where several seconds for one request is normal.
+	clientAppTimeout    = 15 * time.Second
+	clientAppAttempts   = 3
+	clientAppRetryDelay = 500 * time.Millisecond
+)
+
+// retryableError marks the failures that another attempt could resolve.
+type retryableError struct{ error }
+
+func worthRetrying(err error) bool {
+	var r retryableError
+	return errors.As(err, &r)
+}
+
+func fetchClientAppOnce(apiURL string) (clientID, resource string, err error) {
+	client := &http.Client{Timeout: clientAppTimeout}
 	url := strings.TrimRight(apiURL, "/") + "/client-apps"
 
 	resp, err := client.Get(url)
 	if err != nil {
-		return "", "", err
+		// The instance was never reached: a timeout, a reset, a DNS hiccup.
+		return "", "", retryableError{err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		statusErr := fmt.Errorf("HTTP %d", resp.StatusCode)
+		if resp.StatusCode >= 500 {
+			return "", "", retryableError{statusErr}
+		}
+		return "", "", statusErr
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
