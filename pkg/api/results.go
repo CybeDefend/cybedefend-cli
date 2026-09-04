@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cybedefend-cli/pkg/cvss"
 	"cybedefend-cli/pkg/logger"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,29 @@ type Vulnerability struct {
 	VulnerableEndLine   int                  `json:"vulnerableEndLine"`
 	Details             VulnerabilityDetails `json:"vulnerability"`
 	Branch              string               `json:"branch"`
+	CVE                 string               `json:"cve,omitempty"`
+	CurrentSeverity     string               `json:"currentSeverity,omitempty"`
+	CurrentPriority     string               `json:"currentPriority,omitempty"`
+	Scores              *VulnerabilityScores `json:"scores,omitempty"`
+}
+
+// VulnerabilityScores groups the platform risk scores of one detection.
+// Pointer fields distinguish "score is 0" from "score not computed": absent
+// scores are omitted from the JSON output instead of showing up as zeros.
+type VulnerabilityScores struct {
+	PriorityScore            *float64 `json:"priorityScore,omitempty"`
+	Cvss4BaseScore           *float64 `json:"cvss4BaseScore,omitempty"`
+	Cvss4EnvironmentalScore  *float64 `json:"cvss4EnvironmentalScore,omitempty"`
+	Cvss4Vector              string   `json:"cvss4Vector,omitempty"`
+	Cvss4EnvironmentalVector string   `json:"cvss4EnvironmentalVector,omitempty"`
+	// Cvss4Breakdown is the human-readable decoding of the vectors (base
+	// metrics, threat, environmental factors), as shown in the platform UI.
+	Cvss4Breakdown        *cvss.Breakdown `json:"cvss4Breakdown,omitempty"`
+	EpssScore             *float64        `json:"epssScore,omitempty"`
+	EpssPercentile        *float64        `json:"epssPercentile,omitempty"`
+	ExploitabilityScore   *float64        `json:"exploitabilityScore,omitempty"`
+	ExploitabilityVerdict string          `json:"exploitabilityVerdict,omitempty"`
+	ScoringSource         string          `json:"scoringSource,omitempty"`
 }
 
 // VulnerabilityDetails holds the detail block nested inside a Vulnerability.
@@ -85,12 +109,55 @@ type apiVulnerabilityWrapper struct {
 type apiVulnerabilityBase struct {
 	ID                  string               `json:"id"`
 	CurrentSeverity     string               `json:"currentSeverity"`
+	CurrentPriority     string               `json:"currentPriority"`
 	Language            string               `json:"language"`
 	Path                string               `json:"path"`
 	VulnerableStartLine int                  `json:"vulnerableStartLine"`
 	VulnerableEndLine   int                  `json:"vulnerableEndLine"`
 	Details             VulnerabilityDetails `json:"vulnerability"`
 	Branch              string               `json:"branch"`
+	apiScoreFields
+}
+
+// apiScoreFields is the score block the API attaches to every detection,
+// identical across scan types (embedded in `base` for sast/iac/secret/cicd/sca,
+// at the top level for container).
+type apiScoreFields struct {
+	ScoringSource            string   `json:"scoringSource"`
+	Cvss4Vector              string   `json:"cvss4Vector"`
+	Cvss4BaseScore           *float64 `json:"cvss4BaseScore"`
+	Cvss4EnvironmentalScore  *float64 `json:"cvss4EnvironmentalScore"`
+	Cvss4EnvironmentalVector string   `json:"cvss4EnvironmentalVector"`
+	EpssScore                *float64 `json:"epssScore"`
+	EpssPercentile           *float64 `json:"epssPercentile"`
+	ExploitabilityScore      *float64 `json:"exploitabilityScore"`
+	ExploitabilityVerdict    string   `json:"exploitabilityVerdict"`
+	PriorityScore            *float64 `json:"priorityScore"`
+}
+
+// toScores converts the raw score fields into the public block, or nil when the
+// API sent no actual score. scoringSource is not a score: the API defaults it to
+// "static" even for detections that were never scored (e.g. duplicate or
+// withdrawn advisories without a CVSS vector), so it never triggers the block.
+func (f apiScoreFields) toScores() *VulnerabilityScores {
+	if f.PriorityScore == nil && f.Cvss4BaseScore == nil && f.Cvss4EnvironmentalScore == nil &&
+		f.EpssScore == nil && f.EpssPercentile == nil && f.ExploitabilityScore == nil &&
+		f.Cvss4Vector == "" && f.Cvss4EnvironmentalVector == "" && f.ExploitabilityVerdict == "" {
+		return nil
+	}
+	return &VulnerabilityScores{
+		PriorityScore:            f.PriorityScore,
+		Cvss4BaseScore:           f.Cvss4BaseScore,
+		Cvss4EnvironmentalScore:  f.Cvss4EnvironmentalScore,
+		Cvss4Vector:              f.Cvss4Vector,
+		Cvss4EnvironmentalVector: f.Cvss4EnvironmentalVector,
+		Cvss4Breakdown:           cvss.ParseV4(f.Cvss4Vector, f.Cvss4EnvironmentalVector),
+		EpssScore:                f.EpssScore,
+		EpssPercentile:           f.EpssPercentile,
+		ExploitabilityScore:      f.ExploitabilityScore,
+		ExploitabilityVerdict:    f.ExploitabilityVerdict,
+		ScoringSource:            f.ScoringSource,
+	}
 }
 
 // scaAutofixRecord is the per-package autofix suggestion returned by the SCA endpoint.
@@ -130,6 +197,55 @@ type scaMetadata struct {
 	Details string             `json:"details"`
 	CWEs    []scaMetadataCWE   `json:"cwes"`
 	Aliases []scaMetadataAlias `json:"aliases"`
+}
+
+// cve returns the CVE identifier of the advisory, falling back to the aliases
+// when the dedicated field is empty.
+func (m *scaMetadata) cve() string {
+	if m == nil {
+		return ""
+	}
+	if m.CVE != "" {
+		return m.CVE
+	}
+	for _, a := range m.Aliases {
+		if strings.HasPrefix(a.Alias, "CVE-") {
+			return a.Alias
+		}
+	}
+	return ""
+}
+
+// ─── container list deserialization ─────────────────────────────────────────
+// The container list endpoint returns flat detections — no `base` wrapper.
+
+type apiContainerDetection struct {
+	ID                      string               `json:"id"`
+	VulnerabilityIdentifier string               `json:"vulnerabilityIdentifier"`
+	CurrentSeverity         string               `json:"currentSeverity"`
+	CurrentPriority         string               `json:"currentPriority"`
+	FixedVersion            string               `json:"fixedVersion"`
+	Branch                  string               `json:"branch"`
+	Package                 *apiContainerPackage `json:"package"`
+	Vuln                    *apiContainerVuln    `json:"vuln"`
+	apiScoreFields
+}
+
+type apiContainerPackage struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type apiContainerVuln struct {
+	VulnerabilityID  string   `json:"vulnerabilityId"`
+	PkgName          string   `json:"pkgName"`
+	InstalledVersion string   `json:"installedVersion"`
+	Title            string   `json:"title"`
+	Description      string   `json:"description"`
+	Type             string   `json:"type"`
+	Class            string   `json:"class"`
+	Target           string   `json:"target"`
+	CweIDs           []string `json:"cweIds"`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +389,11 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 		return nil, err
 	}
 
+	// The container list endpoint has its own flat shape.
+	if scanType == "container" {
+		return parseContainerResults(raw)
+	}
+
 	var apiResp apiScanResults
 	if err := json.Unmarshal(raw, &apiResp); err != nil {
 		return nil, err
@@ -288,6 +409,10 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 			VulnerableEndLine:   w.Base.VulnerableEndLine,
 			Details:             w.Base.Details,
 			Branch:              w.Base.Branch,
+			CVE:                 w.Metadata.cve(),
+			CurrentSeverity:     w.Base.CurrentSeverity,
+			CurrentPriority:     w.Base.CurrentPriority,
+			Scores:              w.Base.toScores(),
 		}
 		// For SCA findings: base.vulnerability is null; populate from metadata/library.
 		if v.Details.Name == "" && w.Metadata != nil {
@@ -311,6 +436,79 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 				v.Details.HowToPrevent = "Update " + w.AutofixRecords[0].VulnerablePackage +
 					" to version " + w.AutofixRecords[0].RecommendedProposedVersion + " or later."
 			}
+		}
+		vulns = append(vulns, v)
+	}
+
+	return &ScanResults{
+		ProjectID:       apiResp.ProjectID,
+		ProjectName:     apiResp.ProjectName,
+		Page:            apiResp.Page,
+		Total:           apiResp.Total,
+		TotalPages:      apiResp.TotalPages,
+		Severity:        apiResp.Severity,
+		Vulnerabilities: vulns,
+	}, nil
+}
+
+// parseContainerResults maps the flat container detections onto the shared
+// Vulnerability shape used by every output format.
+func parseContainerResults(raw []byte) (*ScanResults, error) {
+	var apiResp struct {
+		ProjectID       string                  `json:"projectId"`
+		ProjectName     string                  `json:"projectName"`
+		Page            int                     `json:"page"`
+		Total           int                     `json:"total"`
+		TotalPages      int                     `json:"totalPages"`
+		Severity        []string                `json:"severity"`
+		Vulnerabilities []apiContainerDetection `json:"vulnerabilities"`
+	}
+	if err := json.Unmarshal(raw, &apiResp); err != nil {
+		return nil, err
+	}
+
+	vulns := make([]Vulnerability, 0, len(apiResp.Vulnerabilities))
+	for _, d := range apiResp.Vulnerabilities {
+		v := Vulnerability{
+			ID:              d.ID,
+			Branch:          d.Branch,
+			CurrentSeverity: d.CurrentSeverity,
+			CurrentPriority: d.CurrentPriority,
+			Scores:          d.toScores(),
+		}
+		v.Details.Severity = strings.ToUpper(d.CurrentSeverity)
+		v.Details.VulnerabilityType = "container"
+
+		if strings.HasPrefix(d.VulnerabilityIdentifier, "CVE-") {
+			v.CVE = d.VulnerabilityIdentifier
+		} else if d.Vuln != nil && strings.HasPrefix(d.Vuln.VulnerabilityID, "CVE-") {
+			v.CVE = d.Vuln.VulnerabilityID
+		}
+
+		pkgName, pkgVersion := "", ""
+		if d.Vuln != nil {
+			v.Details.Name = d.Vuln.Title
+			v.Details.Description = d.Vuln.Description
+			v.Details.CWE = d.Vuln.CweIDs
+			// The list endpoint leaves `type` empty; `class` (os-pkgs / lang-pkgs) is the fallback.
+			v.Language = d.Vuln.Type
+			if v.Language == "" {
+				v.Language = d.Vuln.Class
+			}
+			v.Path = d.Vuln.Target
+			pkgName, pkgVersion = d.Vuln.PkgName, d.Vuln.InstalledVersion
+		}
+		if d.Package != nil {
+			pkgName, pkgVersion = d.Package.Name, d.Package.Version
+		}
+		if pkgName != "" {
+			v.Path = pkgName + "@" + pkgVersion
+		}
+		if v.Details.Name == "" {
+			v.Details.Name = d.VulnerabilityIdentifier
+		}
+		if d.FixedVersion != "" && pkgName != "" {
+			v.Details.HowToPrevent = "Update " + pkgName + " to version " + d.FixedVersion + " or later."
 		}
 		vulns = append(vulns, v)
 	}

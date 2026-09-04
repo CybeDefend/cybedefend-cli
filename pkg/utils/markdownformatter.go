@@ -67,12 +67,67 @@ func RenderMarkdownReport(report VulnerabilityReport, outputFilePath string) err
 		sb.WriteString(fmt.Sprintf("### %s %s (%d)\n\n", severityIcon, order, len(group)))
 
 		for _, v := range group {
+			title := escapeMarkdown(v.Name)
+			if v.CVE != "" {
+				title += " (" + escapeMarkdown(v.CVE) + ")"
+			}
 			sb.WriteString(fmt.Sprintf("<details>\n<summary><strong>%s</strong> — <code>%s:%d</code></summary>\n\n",
-				escapeMarkdown(v.Name), v.Path, v.VulnerableStartLine))
+				title, v.Path, v.VulnerableStartLine))
 
 			sb.WriteString(fmt.Sprintf("**Language:** `%s`  \n", v.Language))
-			sb.WriteString(fmt.Sprintf("**Location:** `%s` lines %d–%d  \n\n",
+			sb.WriteString(fmt.Sprintf("**Location:** `%s` lines %d–%d  \n",
 				v.Path, v.VulnerableStartLine, v.VulnerableEndLine))
+
+			if v.CVE != "" {
+				if url := nvdURL(v.CVE); url != "" {
+					sb.WriteString(fmt.Sprintf("**CVE:** [%s](%s)  \n", v.CVE, url))
+				} else {
+					sb.WriteString(fmt.Sprintf("**CVE:** `%s`  \n", escapeMarkdown(v.CVE)))
+				}
+			}
+			if v.Priority != "" {
+				line := fmt.Sprintf("**Priority:** `%s`", strings.ToUpper(v.Priority))
+				if v.PriorityScore != nil {
+					line += fmt.Sprintf(" (score %s/100)", formatScore(v.PriorityScore))
+				}
+				sb.WriteString(line + "  \n")
+			}
+			if v.Cvss4BaseScore != nil {
+				line := "**CVSS 4.0 Base:** " + formatScore(v.Cvss4BaseScore)
+				if v.Cvss4Vector != "" {
+					line += " (`" + v.Cvss4Vector + "`)"
+				}
+				sb.WriteString(line + "  \n")
+			}
+			if v.Cvss4EnvironmentalScore != nil {
+				line := "**CVSS 4.0 Environmental:** " + formatScore(v.Cvss4EnvironmentalScore)
+				if v.Cvss4EnvironmentalVector != "" {
+					line += " (`" + v.Cvss4EnvironmentalVector + "`)"
+				}
+				sb.WriteString(line + "  \n")
+			}
+			if v.EpssScore != nil {
+				line := "**EPSS:** " + formatPercent(v.EpssScore)
+				if v.EpssPercentile != nil {
+					line += fmt.Sprintf(" (percentile %s)", formatPercent(v.EpssPercentile))
+				}
+				sb.WriteString(line + "  \n")
+			}
+			if v.ExploitabilityVerdict != "" {
+				sb.WriteString(fmt.Sprintf("**Exploitability:** `%s`  \n", v.ExploitabilityVerdict))
+			}
+			sb.WriteString("\n")
+
+			if v.Cvss4Breakdown != nil {
+				sb.WriteString("**CVSS 4.0 Breakdown:**\n\n| Section | Metric | Value |\n|---|---|---|\n")
+				for _, sec := range v.Cvss4Breakdown.Sections() {
+					for _, m := range sec.Metrics {
+						sb.WriteString(fmt.Sprintf("| %s | `%s:%s` %s | %s |\n",
+							sec.Title, m.Metric, m.Value, m.Name, escapeMarkdown(m.Label)))
+					}
+				}
+				sb.WriteString("\n")
+			}
 
 			if v.Description != "" {
 				sb.WriteString("**Description:**  \n")

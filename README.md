@@ -318,23 +318,52 @@ cybedefend results [flags]
 
 #### Default Behavior
 
-By default, the command fetches results in `json` format for the `sast` type and saves them to `results.json` in the current directory.
+By default, the command fetches all scan types (`--type all`) in `json` format and saves them to `results.json` in the current directory.
 
 #### Flags
 
 - `--project-id`: Project ID for which to fetch results. If not provided, the value from the configuration or environment variables will be used.
 - `--type, -t`: Type of results to fetch. Options:
-  - `sast`: Static Application Security Testing (default).
+  - `all` (default): Every scan type, grouped by category in the JSON output.
+  - `sast`: Static Application Security Testing.
   - `iac`: Infrastructure as Code.
+  - `sca`: Software Composition Analysis.
+  - `secret`: Secret detection.
+  - `cicd`: CI/CD configuration analysis.
+  - `container`: Container image vulnerabilities.
 - `--page, -p`: Page number to fetch (default: `1`). Ignored if `--all` is set.
-- `--all, -a`: Fetch all results across all pages.
+- `--all, -a`: Fetch all results across all pages (default: `true`).
+- `--branch, -b`: Filter results by branch (default: all branches).
+- `--grouped, -g`: Return results grouped by rule/CVE (JSON output only).
+- `--scores`: Include CVE identifiers and risk scores (priority, CVSS 4.0, EPSS, exploitability) in the output. Off by default so the output keeps its historical shape.
 - `--output, -o`: Format of the output file. Options:
   - `json` (default): Saves results as a JSON file.
   - `html`: Saves results as an HTML file.
   - `sarif`: Saves results in SARIF format.
+  - `markdown`: Saves results as a Markdown report.
 - `--filename, -f`: Name of the output file (default: `results.json`).
 - `--filepath`: Path to save the output file (default: `.`).
 - `--ci`: Enables CI/CD-friendly output. Disables colors, ASCII art, and additional formatting for plain text output.
+
+#### Risk data with `--scores`
+
+With `--scores`, every vulnerability carries — in addition to the CWE and OWASP references — the identifiers and risk scores computed by the platform, in all output formats:
+
+- `cve`: CVE identifier (SCA and container findings).
+- `currentSeverity` / `currentPriority`: effective severity and treatment priority (`critical_urgent`, `urgent`, `normal`, `low`, `very_low`).
+- `scores.priorityScore`: the 0–100 priority score blending CVSS 4.0 environmental, EPSS, exploitability and business context.
+- `scores.cvss4BaseScore` / `scores.cvss4Vector`: CVSS 4.0 base score and vector.
+- `scores.cvss4EnvironmentalScore` / `scores.cvss4EnvironmentalVector`: CVSS 4.0 environmental score and vector (contextualized with the project security context).
+- `scores.cvss4Breakdown`: the vectors decoded metric by metric, as in the platform UI — base metrics grouped into Exploitability, Vulnerable System Impact and Subsequent System Impact, plus the threat, environmental and supplemental metrics that are defined (e.g. `AV:N` Attack Vector → Network, `CR:H` Confidentiality Requirement → High).
+- `scores.epssScore` / `scores.epssPercentile`: EPSS exploitation probability and percentile (SCA/container findings with a CVE).
+- `scores.exploitabilityScore` / `scores.exploitabilityVerdict`: exploitability assessment (`not_exploitable`, `theoretical`, `proven`, `actively_exploited`).
+- `scores.scoringSource`: origin of the scoring (`static` heuristics or `agent` analysis).
+
+Fields are omitted when the platform has not computed the corresponding score. In SARIF output the same data is exposed as a property bag on each result, including a GitHub-compatible `security-severity` value; the HTML and Markdown reports render a "Risk Scores" block per finding, including the CVSS 4.0 breakdown table.
+
+```bash
+cybedefend results --project-id your-project-id --type sca --scores --output markdown
+```
 
 #### Examples
 
