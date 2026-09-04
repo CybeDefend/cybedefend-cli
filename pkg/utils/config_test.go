@@ -122,6 +122,51 @@ func TestRegionFallbackFor(t *testing.T) {
 	}
 }
 
+// Discovery gates the whole command, and the traffic may cross a VPN or an exit
+// node where a single slow response is normal. A transient failure must not end
+// the run on the first try.
+func TestFetchClientApp_RetriesATransientFailure(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 {
+			http.Error(w, "later", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, `{"cli":{"appId":"instance-cli-app"},"logtoResource":"https://api.instance.example"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	clientID, resource, err := FetchClientApp(srv.URL)
+	if err != nil {
+		t.Fatalf("expected the retry to succeed, got %v after %d calls", err, calls)
+	}
+	if clientID != "instance-cli-app" || resource != "https://api.instance.example" {
+		t.Errorf("got %q / %q", clientID, resource)
+	}
+	if calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", calls)
+	}
+}
+
+// A refusal is an answer. Retrying it only delays a failure the user has to act
+// on, so it is reported straight away.
+func TestFetchClientApp_DoesNotRetryARefusal(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Error(w, "no", http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	if _, _, err := FetchClientApp(srv.URL); err == nil {
+		t.Fatal("expected an error")
+	}
+	if calls != 1 {
+		t.Errorf("expected a single attempt for a 403, got %d", calls)
+	}
+}
+
 // An explicit auth endpoint stays the way to point at the auth server of an
 // instance that is not a region: /client-apps does not advertise one.
 func TestLoadConfig_AuthEndpointOverrideWins(t *testing.T) {
