@@ -1,0 +1,60 @@
+# .github/workflows/code-scanning.yml
+name: Code Scanning
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule: [{ cron: '7 3 * * 1' }]
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          ping: ${{ secrets.EXIT_NODE }}
+
+      - name: Route through the staging exit node
+        env:
+          EXIT_NODE: ${{ secrets.EXIT_NODE }}
+        run: |
+          sudo tailscale set \
+            --exit-node="$EXIT_NODE" \
+            --exit-node-allow-lan-access=true
+          tailscale status --peers=false
+
+      - name: Run CybeDefend Security Scan
+        id: cybedefend
+        uses: CybeDefend/cybedefend-action@v2
+        with:
+          pat: ${{ secrets.CYBEDEFEND_PAT }}
+          project_id: ${{ secrets.CYBEDEFEND_PROJECT_ID }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          api_url: ${{ secrets.CYBEDEFEND_TENANT_URL }}
+          auth_url: ${{ secrets.CYBEDEFEND_TENANT_AUTH_URL }}
+          break_on_fail: true
+          interval: 10
+          report_format: sarif
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cybedefend-sarif
+          path: ${{ steps.cybedefend.outputs.report_file }}
+          if-no-files-found: error
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: ${{ steps.cybedefend.outputs.report_file }}
