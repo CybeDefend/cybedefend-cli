@@ -3,10 +3,11 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -28,18 +29,16 @@ var reportSBOMCmd = &cobra.Command{
 		projectID := getProjectID(cmd)
 		output, _ := cmd.Flags().GetString("output")
 
+		wait := reportWait(cmd, validation.ReportInput{Output: output})
+
 		client := newClientFromConfig()
-		data, err := client.GetSBOMReport(projectID)
+		data, suggested, err := client.GetSBOMReport(projectID, wait)
 		if err != nil {
 			logger.Error("Failed to get SBOM report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			output = fmt.Sprintf("sbom-%s.json", projectID)
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("sbom-%s.json", projectID)), data)
 	},
 }
 
@@ -54,20 +53,16 @@ var reportOWASPCmd = &cobra.Command{
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		output, _ := cmd.Flags().GetString("output")
 
-		validateReportFormat(format)
+		wait := reportWait(cmd, validation.ReportInput{Format: format, Output: output})
 
 		client := newClientFromConfig()
-		data, err := client.GetOWASPReport(projectID, format, detailed)
+		data, suggested, err := client.GetOWASPReport(projectID, format, detailed, wait)
 		if err != nil {
 			logger.Error("Failed to get OWASP report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			output = fmt.Sprintf("owasp-report-%s.%s", projectID, format)
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("owasp-report-%s.%s", projectID, format)), data)
 	},
 }
 
@@ -82,20 +77,16 @@ var reportCWECmd = &cobra.Command{
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		output, _ := cmd.Flags().GetString("output")
 
-		validateReportFormat(format)
+		wait := reportWait(cmd, validation.ReportInput{Format: format, Output: output})
 
 		client := newClientFromConfig()
-		data, err := client.GetCWEReport(projectID, format, detailed)
+		data, suggested, err := client.GetCWEReport(projectID, format, detailed, wait)
 		if err != nil {
 			logger.Error("Failed to get CWE report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			output = fmt.Sprintf("cwe-report-%s.%s", projectID, format)
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("cwe-report-%s.%s", projectID, format)), data)
 	},
 }
 
@@ -111,25 +102,22 @@ var reportOrgCmd = &cobra.Command{
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		output, _ := cmd.Flags().GetString("output")
 
-		if orgID == "" {
-			logger.Error("--organization-id is required")
-			os.Exit(1)
-		}
-		validateReportType(reportType)
-		validateReportFormat(format)
+		requireID("--organization-id", orgID)
+		wait := reportWait(cmd, validation.ReportInput{
+			OrganizationID: orgID,
+			ReportType:     reportType,
+			Format:         format,
+			Output:         output,
+		})
 
 		client := newClientFromConfig()
-		data, err := client.GetOrgReport(orgID, reportType, format, detailed)
+		data, suggested, err := client.GetOrgReport(orgID, reportType, format, detailed, wait)
 		if err != nil {
 			logger.Error("Failed to get organization report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			output = fmt.Sprintf("org-%s-%s.%s", reportType, orgID, format)
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("org-%s-%s.%s", reportType, orgID, format)), data)
 	},
 }
 
@@ -145,25 +133,22 @@ var reportTeamCmd = &cobra.Command{
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		output, _ := cmd.Flags().GetString("output")
 
-		if teamID == "" {
-			logger.Error("--team-id is required")
-			os.Exit(1)
-		}
-		validateReportType(reportType)
-		validateReportFormat(format)
+		requireID("--team-id", teamID)
+		wait := reportWait(cmd, validation.ReportInput{
+			TeamID:     teamID,
+			ReportType: reportType,
+			Format:     format,
+			Output:     output,
+		})
 
 		client := newClientFromConfig()
-		data, err := client.GetTeamReport(teamID, reportType, format, detailed)
+		data, suggested, err := client.GetTeamReport(teamID, reportType, format, detailed, wait)
 		if err != nil {
 			logger.Error("Failed to get team report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			output = fmt.Sprintf("team-%s-%s.%s", reportType, teamID, format)
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("team-%s-%s.%s", reportType, teamID, format)), data)
 	},
 }
 
@@ -180,65 +165,86 @@ var reportBatchCmd = &cobra.Command{
 		detailed, _ := cmd.Flags().GetBool("detailed")
 		output, _ := cmd.Flags().GetString("output")
 
-		if orgID == "" {
-			logger.Error("--organization-id is required")
-			os.Exit(1)
-		}
+		requireID("--organization-id", orgID)
 		if projectIDs == "" {
 			logger.Error("--project-ids is required (comma-separated)")
 			os.Exit(1)
 		}
-		validateReportType(reportType)
-		validateReportFormat(format)
 
-		ids := strings.Split(projectIDs, ",")
+		ids := splitCSV(projectIDs)
+
+		wait := reportWait(cmd, validation.ReportInput{
+			OrganizationID: orgID,
+			ProjectIDs:     ids,
+			ReportType:     reportType,
+			Format:         format,
+			Output:         output,
+		})
+
 		reqBody := &api.BatchReportRequest{
 			ProjectIDs: ids,
 			Detailed:   &detailed,
 		}
 
 		client := newClientFromConfig()
-		data, suggestedFilename, err := client.GetBatchReport(orgID, reportType, format, reqBody)
+		data, suggested, err := client.GetBatchReport(orgID, reportType, format, reqBody, wait)
 		if err != nil {
 			logger.Error("Failed to get batch report: %v", err)
 			os.Exit(1)
 		}
 
-		if output == "" {
-			if suggestedFilename != "" {
-				output = suggestedFilename
-			} else {
-				output = fmt.Sprintf("batch-%s.%s", reportType, format)
-			}
-		}
-
-		writeReportFile(output, data)
+		writeReportFile(resolveReportOutput(output, suggested, fmt.Sprintf("batch-%s.%s", reportType, format)), data)
 	},
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
 
-func validateReportFormat(format string) {
-	switch format {
-	case "json", "html", "pdf":
-		// ok
-	default:
-		logger.Error("Invalid format: %s. Use 'json', 'html', or 'pdf'.", format)
+// validateReportInput checks the flags a report subcommand was given. Which id
+// a subcommand needs is its own business — the required ones are asserted at the
+// call site — so what is checked here is that every value that *was* given is
+// one the report URL, the request body and the output path can carry.
+func validateReportInput(input validation.ReportInput) {
+	if err := validation.Struct(input); err != nil {
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 }
 
-func validateReportType(reportType string) {
-	switch reportType {
-	case "owasp", "cwe":
-		// ok
+// reportWait validates everything a report subcommand was given and returns how
+// long it may wait for the API to finish generating. The two belong together:
+// --timeout is part of the same schema as the rest of the flags, and a report
+// command has nothing to do before both are settled.
+func reportWait(cmd *cobra.Command, input validation.ReportInput) time.Duration {
+	seconds, _ := cmd.Flags().GetInt("timeout")
+	input.TimeoutSeconds = seconds
+	validateReportInput(input)
+	return time.Duration(seconds) * time.Second
+}
+
+// resolveReportOutput picks the path to write to: an explicit --output wins,
+// then the filename the API suggests for the report it just generated, then a
+// name built from the ids. The API's name carries the right extension for the
+// format, which the fallback can only guess at.
+func resolveReportOutput(output, suggested, fallback string) string {
+	switch {
+	case output != "":
+		return output
+	case suggested != "":
+		return suggested
 	default:
-		logger.Error("Invalid report type: %s. Use 'owasp' or 'cwe'.", reportType)
-		os.Exit(1)
+		return fallback
 	}
 }
 
 func writeReportFile(outputPath string, data []byte) {
+	// An empty report is not a report. Writing one and announcing success is
+	// what handed CI an unusable file while the exit code said everything was
+	// fine — the caller has to know it got nothing.
+	if len(data) == 0 {
+		logger.Error("The API returned an empty report; %s was left untouched", outputPath)
+		os.Exit(1)
+	}
+
 	dir := filepath.Dir(outputPath)
 	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -261,18 +267,21 @@ func init() {
 	// report sbom
 	reportSBOMCmd.Flags().String("project-id", "", "Project ID")
 	reportSBOMCmd.Flags().String("output", "", "Output file path (default: sbom-<project-id>.json)")
+	reportSBOMCmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// report owasp
 	reportOWASPCmd.Flags().String("project-id", "", "Project ID")
 	reportOWASPCmd.Flags().String("format", "json", "Output format: json, html, pdf")
 	reportOWASPCmd.Flags().Bool("detailed", false, "Include detailed information")
 	reportOWASPCmd.Flags().String("output", "", "Output file path")
+	reportOWASPCmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// report cwe
 	reportCWECmd.Flags().String("project-id", "", "Project ID")
 	reportCWECmd.Flags().String("format", "json", "Output format: json, html, pdf")
 	reportCWECmd.Flags().Bool("detailed", false, "Include detailed information")
 	reportCWECmd.Flags().String("output", "", "Output file path")
+	reportCWECmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// report org
 	reportOrgCmd.Flags().String("organization-id", "", "Organization ID (required)")
@@ -280,6 +289,7 @@ func init() {
 	reportOrgCmd.Flags().String("format", "json", "Output format: json, html, pdf")
 	reportOrgCmd.Flags().Bool("detailed", false, "Include detailed information")
 	reportOrgCmd.Flags().String("output", "", "Output file path")
+	reportOrgCmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// report team
 	reportTeamCmd.Flags().String("team-id", "", "Team ID (required)")
@@ -287,6 +297,7 @@ func init() {
 	reportTeamCmd.Flags().String("format", "json", "Output format: json, html, pdf")
 	reportTeamCmd.Flags().Bool("detailed", false, "Include detailed information")
 	reportTeamCmd.Flags().String("output", "", "Output file path")
+	reportTeamCmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// report batch
 	reportBatchCmd.Flags().String("organization-id", "", "Organization ID (required)")
@@ -295,6 +306,7 @@ func init() {
 	reportBatchCmd.Flags().String("format", "json", "Output format: json, html, pdf")
 	reportBatchCmd.Flags().Bool("detailed", true, "Include detailed information")
 	reportBatchCmd.Flags().String("output", "", "Output file path")
+	reportBatchCmd.Flags().Int("timeout", 300, "Seconds to wait for the API to finish generating the report")
 
 	// Register subcommands
 	reportCmd.AddCommand(reportSBOMCmd)

@@ -42,7 +42,11 @@ type Vulnerability struct {
 	CVE                 string               `json:"cve,omitempty"`
 	CurrentSeverity     string               `json:"currentSeverity,omitempty"`
 	CurrentPriority     string               `json:"currentPriority,omitempty"`
-	Scores              *VulnerabilityScores `json:"scores,omitempty"`
+	// CurrentState is decoded but never serialised: the severity gate needs it
+	// to drop resolved findings, while the `results` output keeps the shape
+	// downstream consumers already parse.
+	CurrentState string               `json:"-"`
+	Scores       *VulnerabilityScores `json:"scores,omitempty"`
 }
 
 // VulnerabilityScores groups the platform risk scores of one detection.
@@ -110,6 +114,7 @@ type apiVulnerabilityBase struct {
 	ID                  string               `json:"id"`
 	CurrentSeverity     string               `json:"currentSeverity"`
 	CurrentPriority     string               `json:"currentPriority"`
+	CurrentState        string               `json:"currentState"`
 	Language            string               `json:"language"`
 	Path                string               `json:"path"`
 	VulnerableStartLine int                  `json:"vulnerableStartLine"`
@@ -224,6 +229,7 @@ type apiContainerDetection struct {
 	VulnerabilityIdentifier string               `json:"vulnerabilityIdentifier"`
 	CurrentSeverity         string               `json:"currentSeverity"`
 	CurrentPriority         string               `json:"currentPriority"`
+	CurrentState            string               `json:"currentState"`
 	FixedVersion            string               `json:"fixedVersion"`
 	Branch                  string               `json:"branch"`
 	Package                 *apiContainerPackage `json:"package"`
@@ -412,6 +418,7 @@ func (c *Client) GetResults(projectID, scanType string, page, limit int, branch 
 			CVE:                 w.Metadata.cve(),
 			CurrentSeverity:     w.Base.CurrentSeverity,
 			CurrentPriority:     w.Base.CurrentPriority,
+			CurrentState:        w.Base.CurrentState,
 			Scores:              w.Base.toScores(),
 		}
 		// For SCA findings: base.vulnerability is null; populate from metadata/library.
@@ -474,6 +481,7 @@ func parseContainerResults(raw []byte) (*ScanResults, error) {
 			Branch:          d.Branch,
 			CurrentSeverity: d.CurrentSeverity,
 			CurrentPriority: d.CurrentPriority,
+			CurrentState:    d.CurrentState,
 			Scores:          d.toScores(),
 		}
 		v.Details.Severity = strings.ToUpper(d.CurrentSeverity)

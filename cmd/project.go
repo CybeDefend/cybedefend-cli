@@ -3,9 +3,11 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -28,8 +30,9 @@ var projectCreateCmd = &cobra.Command{
 		teamID, _ := cmd.Flags().GetString("team-id")
 		name, _ := cmd.Flags().GetString("name")
 
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		// The team id is interpolated into the create-project URL path.
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 		if name == "" {
@@ -110,11 +113,36 @@ func getProjectID(cmd *cobra.Command) string {
 	if pid == "" {
 		pid = viper.GetString("project_id")
 	}
-	if pid == "" {
-		logger.Error("--project-id is required")
+	// Every caller hands this id straight to a client method that interpolates
+	// it into an API URL path, so it is checked once here rather than in each
+	// of the report, compliance, container and overview commands.
+	if err := validation.ResourceID("--project-id", pid); err != nil {
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	return pid
+}
+
+// requireID asserts an id a subcommand cannot run without, and that it is safe
+// to interpolate into an API URL path.
+func requireID(flag, value string) {
+	if err := validation.ResourceID(flag, value); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+}
+
+// splitCSV splits a comma-separated flag into its values, dropping the empty
+// entries a hand-typed list leaves behind: "a, b" and a trailing comma both
+// used to reach the API as values in their own right.
+func splitCSV(value string) []string {
+	var values []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			values = append(values, item)
+		}
+	}
+	return values
 }
 
 // printJSON marshals v to indented JSON and prints to stdout.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,6 +28,9 @@ var complianceHistoryCmd = &cobra.Command{
 		startDate, _ := cmd.Flags().GetString("start-date")
 		endDate, _ := cmd.Flags().GetString("end-date")
 
+		validateCompliancePage(page, pageSize)
+		validateComplianceDates(startDate, endDate)
+
 		client := newClientFromConfig()
 		result, err := client.GetComplianceHistory(projectID, page, pageSize, startDate, endDate)
 		if err != nil {
@@ -47,6 +51,8 @@ var complianceViolationsCmd = &cobra.Command{
 		projectID := getProjectID(cmd)
 		page, _ := cmd.Flags().GetInt("page")
 		limit, _ := cmd.Flags().GetInt("limit")
+
+		validateCompliancePage(page, limit)
 
 		client := newClientFromConfig()
 		result, err := client.GetProjectViolations(projectID, page, limit)
@@ -69,6 +75,8 @@ var complianceStatsCmd = &cobra.Command{
 		startDate, _ := cmd.Flags().GetString("start-date")
 		endDate, _ := cmd.Flags().GetString("end-date")
 
+		validateComplianceDates(startDate, endDate)
+
 		client := newClientFromConfig()
 		result, err := client.GetViolationStats(projectID, startDate, endDate)
 		if err != nil {
@@ -78,6 +86,30 @@ var complianceStatsCmd = &cobra.Command{
 
 		printJSON(result)
 	},
+}
+
+// ── helpers ─────────────────────────────────────────────────────────
+
+// validateCompliancePage checks the pagination the API is about to be asked
+// for. The page size flag is named --page-size on history and --limit on
+// violations, so the caller passes whichever it read.
+func validateCompliancePage(page, pageSize int) {
+	if err := validation.Struct(validation.PageInput{Page: page, PageSize: pageSize}); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+}
+
+// validateComplianceDates checks the --start-date / --end-date filter. Both are
+// optional: omitting one means "no bound on that side".
+func validateComplianceDates(startDate, endDate string) {
+	if err := validation.Struct(validation.DateRangeInput{
+		StartDate: startDate,
+		EndDate:   endDate,
+	}); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
 }
 
 // ── init ────────────────────────────────────────────────────────────

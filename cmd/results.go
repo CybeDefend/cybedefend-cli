@@ -4,6 +4,7 @@ import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
+	"cybedefend-cli/pkg/validation"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -425,26 +426,24 @@ func validateInputs() {
 		}
 	}
 
-	if outputFormat != "json" && outputFormat != "html" && outputFormat != "sarif" && outputFormat != "markdown" {
-		logger.Error("Invalid output format: %s. Use 'json', 'html', 'sarif', or 'markdown'.", outputFormat)
-		os.Exit(1)
+	// --page is only read when --all is off. Fetching every page is the
+	// default, and the flag is ignored in that mode, so it is not held to the
+	// same bound as when the user actually asked for one page.
+	requestedPage := page
+	if allResults {
+		requestedPage = 1
 	}
 
-	if page < 1 && !allResults {
-		logger.Error("Invalid page number: %d. Must be greater than 0.", page)
-		os.Exit(1)
-	}
-
-	validTypes := api.ValidScanTypes
-	valid := false
-	for _, v := range validTypes {
-		if resultType == v {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		logger.Error("Invalid scan type: %s. Use one of: %s", resultType, strings.Join(validTypes, ", "))
+	if err := validation.Struct(validation.ResultsInput{
+		ProjectID:    projectIDResults,
+		ScanType:     resultType,
+		OutputFormat: outputFormat,
+		OutputFile:   outputFile,
+		OutputPath:   outputPath,
+		Branch:       resultsBranch,
+		Page:         requestedPage,
+	}); err != nil {
+		logger.Error("%v", err)
 		os.Exit(1)
 	}
 }

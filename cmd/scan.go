@@ -4,6 +4,7 @@ import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
 	"cybedefend-cli/pkg/utils"
+	"cybedefend-cli/pkg/validation"
 	"fmt"
 	"os"
 	"strings"
@@ -55,13 +56,15 @@ var scanCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		zipPath, err := prepareZipFile()
-		if err != nil {
+		// Checked before the directory is zipped: an invalid severity gate used
+		// to surface only after the archive had been built and discarded.
+		if err := validateScanInputs(); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
-		if err := validateBreakOnSeverity(); err != nil {
+		zipPath, err := prepareZipFile()
+		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
@@ -129,20 +132,23 @@ func prepareZipFile() (string, error) {
 	return "", fmt.Errorf("Please provide a directory to scan using --dir or a zip file using --file")
 }
 
-// validateBreakOnSeverity checks if the provided severity level is valid
-func validateBreakOnSeverity() error {
-	validSeverities := map[string]bool{
-		"critical": true,
-		"high":     true,
-		"medium":   true,
-		"low":      true,
-		"none":     true, // Add 'none' as a valid value to explicitly disable break on severity
-	}
-	breakOnSeverity = strings.ToLower(breakOnSeverity)
-	if breakOnSeverity != "" && !validSeverities[breakOnSeverity] {
-		return fmt.Errorf("Invalid severity level: %s. Use 'critical', 'high', 'medium', 'low', or 'none'", breakOnSeverity)
-	}
-	return nil
+// validateScanInputs checks every flag the scan command was given against the
+// declared schema. "none" stays a valid severity: it is the explicit way to
+// disable the gate.
+func validateScanInputs() error {
+	// The gate is compared in lower case further down, and the flag is
+	// documented in lower case, so normalise before checking.
+	breakOnSeverity = strings.ToLower(strings.TrimSpace(breakOnSeverity))
+
+	return validation.Struct(validation.ScanInput{
+		ProjectID:       projectIDScan,
+		Branch:          scanBranch,
+		Directory:       scanDir,
+		ZipFile:         scanFile,
+		BreakOnSeverity: breakOnSeverity,
+		Interval:        scanInterval,
+		PolicyTimeout:   policyCheckTimeout,
+	})
 }
 
 // executeScan starts the scan and handles cleanup of temporary files
@@ -295,8 +301,10 @@ func hasVulnerabilitiesAtOrAboveSeverity(client *api.Client, projectID, minSever
 		severitiesToCheck = []string{"critical"}
 	}
 
-	// Get vulnerabilities by severity
-	vulnerabilities, err := client.GetVulnerabilitiesBySeverity(projectID, "sast", severitiesToCheck)
+	// Counted on the branch that was just scanned, across every scan type: a
+	// critical CVE in a dependency has to block the build the same way a
+	// critical SAST finding does.
+	vulnerabilities, err := client.CountVulnerabilitiesBySeverity(projectID, scanBranch, severitiesToCheck)
 	if err != nil {
 		logger.Error("Error retrieving vulnerabilities: %v", err)
 		// In case of error, assume there are vulnerabilities to be safe
@@ -329,8 +337,7 @@ func showVulnerabilitySummary(client *api.Client, projectID string) {
 	// Check all severity levels
 	severitiesToCheck := []string{"critical", "high", "medium", "low"}
 
-	// Get vulnerabilities by severity
-	vulnerabilities, err := client.GetVulnerabilitiesBySeverity(projectID, "sast", severitiesToCheck)
+	vulnerabilities, err := client.CountVulnerabilitiesBySeverity(projectID, scanBranch, severitiesToCheck)
 	if err != nil {
 		logger.Error("Error retrieving vulnerabilities: %v", err)
 		return

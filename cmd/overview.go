@@ -3,8 +3,8 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -25,10 +25,14 @@ var overviewProjectCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		projectID := getProjectID(cmd)
 		branchesStr, _ := cmd.Flags().GetString("branches")
+		branches := splitCSV(branchesStr)
 
-		var branches []string
-		if branchesStr != "" {
-			branches = strings.Split(branchesStr, ",")
+		if err := validation.Struct(validation.OverviewInput{
+			ProjectID: projectID,
+			Branches:  branches,
+		}); err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
 		}
 
 		client := newClientFromConfig()
@@ -49,37 +53,44 @@ var overviewOrgCmd = &cobra.Command{
 	Short: "Get organization security overview",
 	Run: func(cmd *cobra.Command, args []string) {
 		orgID, _ := cmd.Flags().GetString("organization-id")
-		if orgID == "" {
-			logger.Error("--organization-id is required")
+		severityFilter, _ := cmd.Flags().GetString("severity-filter")
+		statusFilter, _ := cmd.Flags().GetString("status-filter")
+		analysisTypes, _ := cmd.Flags().GetString("analysis-types")
+		dateFrom, _ := cmd.Flags().GetString("date-from")
+		dateTo, _ := cmd.Flags().GetString("date-to")
+		branchesStr, _ := cmd.Flags().GetString("branches")
+		teamIDsStr, _ := cmd.Flags().GetString("team-ids")
+		trendPeriodDays, _ := cmd.Flags().GetInt("trend-period-days")
+
+		branches := splitCSV(branchesStr)
+		teamIDs := splitCSV(teamIDsStr)
+
+		requireID("--organization-id", orgID)
+		if err := validation.Struct(validation.OverviewInput{
+			OrganizationID:  orgID,
+			TeamIDs:         teamIDs,
+			Branches:        branches,
+			DateFrom:        dateFrom,
+			DateTo:          dateTo,
+			TrendPeriodDays: trendPeriodDays,
+		}); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
-		params := &api.OrgOverviewParams{}
-
-		if v, _ := cmd.Flags().GetString("severity-filter"); v != "" {
-			params.SeverityFilter = strings.Split(v, ",")
+		params := &api.OrgOverviewParams{
+			DateFrom:        dateFrom,
+			DateTo:          dateTo,
+			Branches:        branches,
+			TeamIDs:         teamIDs,
+			TrendPeriodDays: trendPeriodDays,
 		}
-		if v, _ := cmd.Flags().GetString("status-filter"); v != "" {
-			params.StatusFilter = strings.Split(v, ",")
-		}
-		if v, _ := cmd.Flags().GetString("analysis-types"); v != "" {
-			params.AnalysisTypes = strings.Split(v, ",")
-		}
-		if v, _ := cmd.Flags().GetString("date-from"); v != "" {
-			params.DateFrom = v
-		}
-		if v, _ := cmd.Flags().GetString("date-to"); v != "" {
-			params.DateTo = v
-		}
-		if v, _ := cmd.Flags().GetString("branches"); v != "" {
-			params.Branches = strings.Split(v, ",")
-		}
-		if v, _ := cmd.Flags().GetString("team-ids"); v != "" {
-			params.TeamIDs = strings.Split(v, ",")
-		}
-		if v, _ := cmd.Flags().GetInt("trend-period-days"); v > 0 {
-			params.TrendPeriodDays = v
-		}
+		// The API owns the vocabulary of these three filters, so they are passed
+		// through as given rather than checked against a list the CLI would have
+		// to keep in step.
+		params.SeverityFilter = splitCSV(severityFilter)
+		params.StatusFilter = splitCSV(statusFilter)
+		params.AnalysisTypes = splitCSV(analysisTypes)
 
 		client := newClientFromConfig()
 		overview, err := client.GetOrgOverview(orgID, params)
