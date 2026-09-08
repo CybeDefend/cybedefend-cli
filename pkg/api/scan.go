@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 )
@@ -274,97 +273,79 @@ func (c *Client) GetScanStatus(projectID, scanID string) (*ScanStatus, error) {
 	return &result, nil
 }
 
-// buildVulnerabilitiesURL constructs the URL for fetching vulnerabilities with query parameters
-func buildVulnerabilitiesURL(apiURL, projectID, scanType string, severities []string) string {
-	q := url.Values{}
-	q.Set("pageNumber", "1")
-	q.Set("sort", "currentSeverity")
-	q.Set("order", "asc")
-	for _, s := range severities {
-		q.Add("severity[]", s)
+// liveVulnerabilityStates excludes the findings a severity gate must not block
+// a build for: someone has already ruled on them.
+func isLiveVulnerability(state string) bool {
+	switch strings.ToLower(state) {
+	case "resolved", "not_exploitable", "ignored":
+		return false
 	}
-	q.Add("status[]", "to_verify")
-	q.Add("status[]", "confirmed")
-	for _, p := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
-		q.Add("priority[]", p)
-	}
-	return fmt.Sprintf("%s/project/%s/results/%s?%s", apiURL, projectID, scanType, q.Encode())
+	return true
 }
 
-// countVulnerabilitiesBySeverity counts vulnerabilities by severity from the API response
-func countVulnerabilitiesBySeverity(result map[string]interface{}) map[string]int {
-	severityCount := make(map[string]int)
-	vulnerabilities, ok := result["vulnerabilities"].([]interface{})
-	if !ok {
-		return severityCount
+// CountVulnerabilitiesBySeverity counts a branch's live vulnerabilities, grouped
+// by severity, across every scan type.
+//
+// It decodes through GetResults rather than reading the JSON as a bare map. The
+// API nests each finding under a "base" object, so reading `currentSeverity` at
+// the top level silently matched nothing: every finding was skipped, the counts
+// came back empty and `--break-on-severity` reported a clean build for a project
+// whose policy evaluation was blocking on 13 criticals. A gate that fails open
+// is worse than no gate, because CI is built to trust it.
+//
+// The scan type is not fixed either — a critical CVE in a dependency has to
+// block a build the same way a critical SAST finding does — and the pages are
+// walked to the end, since the first page is not the whole result set.
+func (c *Client) CountVulnerabilitiesBySeverity(projectID, branch string, severities []string) (map[string]int, error) {
+	wanted := make(map[string]bool, len(severities))
+	for _, severity := range severities {
+		wanted[strings.ToLower(severity)] = true
 	}
 
-	for _, vuln := range vulnerabilities {
-		vulnMap, ok := vuln.(map[string]interface{})
-		if !ok {
+	counts := make(map[string]int)
+	for _, scanType := range ValidScanTypes {
+		if scanType == "all" {
 			continue
 		}
-
-		// Only count vulnerabilities that are not resolved or not_exploitable or ignored
-		state, _ := vulnMap["currentState"].(string)
-		if state == "resolved" || state == "not_exploitable" || state == "ignored" {
-			continue
+		if err := c.countScanType(projectID, scanType, branch, wanted, counts); err != nil {
+			return nil, err
 		}
-
-		// Safely get the severity, skip if not present or not a string
-		severity, ok := vulnMap["currentSeverity"].(string)
-		if !ok || severity == "" {
-			continue
-		}
-		severityCount[strings.ToLower(severity)]++
 	}
-
-	return severityCount
+	return counts, nil
 }
 
-// GetVulnerabilitiesBySeverity returns the count of vulnerabilities for each severity
-func (c *Client) GetVulnerabilitiesBySeverity(projectID, scanType string, severities []string) (map[string]int, error) {
-	// Build the URL with query parameters
-	url := buildVulnerabilitiesURL(c.APIURL, projectID, scanType, severities)
+const (
+	severityCountPageSize = 100
+	// A guard against paging forever if the API keeps reporting more pages.
+	severityCountMaxPages = 100
+)
 
-	logger.Debug("GET %s", url)
+func (c *Client) countScanType(projectID, scanType, branch string, wanted map[string]bool, counts map[string]int) error {
+	for page := 1; page <= severityCountMaxPages; page++ {
+		results, err := c.GetResults(projectID, scanType, page, severityCountPageSize, branch)
+		if err != nil {
+			// A scan type the plan does not cover answers 403. That is not a
+			// reason to abandon the gate for the types it does cover.
+			if strings.Contains(err.Error(), "403") {
+				logger.Debug("skipping %s for the severity gate: %v", scanType, err)
+				return nil
+			}
+			return fmt.Errorf("counting %s vulnerabilities: %w", scanType, err)
+		}
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
+		for _, v := range results.Vulnerabilities {
+			if !isLiveVulnerability(v.CurrentState) {
+				continue
+			}
+			severity := strings.ToLower(v.CurrentSeverity)
+			if wanted[severity] {
+				counts[severity]++
+			}
+		}
+
+		if results.TotalPages <= page || len(results.Vulnerabilities) == 0 {
+			return nil
+		}
 	}
-	token, err := c.GetAccessToken()
-	if err != nil {
-		return nil, fmt.Errorf("authentication error: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error: %s", string(body))
-	}
-
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse the response to extract vulnerabilities by severity
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	// Count vulnerabilities by severity
-	severityCount := countVulnerabilitiesBySeverity(result)
-
-	return severityCount, nil
+	return nil
 }
