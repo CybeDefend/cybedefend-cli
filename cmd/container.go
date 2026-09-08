@@ -3,6 +3,7 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"os"
 	"strings"
 
@@ -64,6 +65,19 @@ func makeContainerScanCommand(cliName string, info registryInfo) *cobra.Command 
 				os.Exit(1)
 			}
 
+			severities := splitCSV(strings.ToUpper(severitiesStr))
+
+			if err := validation.Struct(validation.ContainerScanInput{
+				ProjectID:    projectID,
+				Image:        imageName,
+				CredentialID: credentialID,
+				Branch:       branch,
+				Severities:   severities,
+			}); err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+
 			reqBody := &api.ContainerScanRequest{
 				ImageName: imageName,
 			}
@@ -76,8 +90,8 @@ func makeContainerScanCommand(cliName string, info registryInfo) *cobra.Command 
 			if cmd.Flags().Changed("private") {
 				reqBody.PrivateScan = &privateScan
 			}
-			if severitiesStr != "" {
-				reqBody.Severities = strings.Split(strings.ToUpper(severitiesStr), ",")
+			if len(severities) > 0 {
+				reqBody.Severities = severities
 			}
 
 			client := newClientFromConfig()

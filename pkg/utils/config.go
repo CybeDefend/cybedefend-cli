@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"cybedefend-cli/pkg/validation"
+
 	"github.com/spf13/viper"
 )
 
@@ -188,6 +190,21 @@ func LoadConfig() (*Config, error) {
 	}
 
 	apiURL := viper.GetString("api_url")
+
+	// Everything above came from a flag, an environment variable or the YAML
+	// file, and everything below either calls one of these URLs or hands the
+	// project id to a command that interpolates it into an API path. Check the
+	// resolved set here, once, so a malformed endpoint fails before the network
+	// call rather than as an opaque transport error three frames down.
+	if err := validation.Struct(validation.ConfigInput{
+		APIURL:       apiURL,
+		AuthEndpoint: authEndpoint,
+		Region:       strings.ToLower(strings.TrimSpace(viper.GetString("region"))),
+		ProjectID:    viper.GetString("project_id"),
+		Branch:       viper.GetString("branch"),
+	}); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
 
 	// The resource is the audience of the token, so it is the API being called,
 	// never the region's, and the client id belongs to that same instance. When

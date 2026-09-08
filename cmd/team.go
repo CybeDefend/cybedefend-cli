@@ -3,7 +3,9 @@ package cmd
 import (
 	"cybedefend-cli/pkg/api"
 	"cybedefend-cli/pkg/logger"
+	"cybedefend-cli/pkg/validation"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -26,8 +28,8 @@ var teamCreateCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString("name")
 		desc, _ := cmd.Flags().GetString("description")
 
-		if orgID == "" {
-			logger.Error("--organization-id is required")
+		if err := validation.ResourceID("--organization-id", orgID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 		if name == "" {
@@ -61,8 +63,8 @@ var teamDeleteCmd = &cobra.Command{
 	Short: "Delete a team",
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -85,12 +87,12 @@ var teamGetCmd = &cobra.Command{
 		orgID, _ := cmd.Flags().GetString("organization-id")
 		teamID, _ := cmd.Flags().GetString("team-id")
 
-		if orgID == "" {
-			logger.Error("--organization-id is required")
+		if err := validation.ResourceID("--organization-id", orgID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -112,8 +114,8 @@ var teamListCmd = &cobra.Command{
 	Short: "List all teams in an organization",
 	Run: func(cmd *cobra.Command, args []string) {
 		orgID, _ := cmd.Flags().GetString("organization-id")
-		if orgID == "" {
-			logger.Error("--organization-id is required")
+		if err := validation.ResourceID("--organization-id", orgID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -140,8 +142,8 @@ var teamUpdateCmd = &cobra.Command{
 	Short: "Update a team",
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -172,14 +174,19 @@ var teamMembersCmd = &cobra.Command{
 	Short: "List team members",
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
 		page, _ := cmd.Flags().GetInt("page")
 		pageSize, _ := cmd.Flags().GetInt("page-size")
 		search, _ := cmd.Flags().GetString("search")
+
+		if err := validation.Struct(validation.PageInput{Page: page, PageSize: pageSize}); err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
 
 		client := newClientFromConfig()
 		result, err := client.GetTeamMembers(teamID, page, pageSize, search)
@@ -202,16 +209,18 @@ var teamAddMemberCmd = &cobra.Command{
 		userID, _ := cmd.Flags().GetString("user-id")
 		role, _ := cmd.Flags().GetString("role")
 
-		if teamID == "" {
-			logger.Error("--team-id is required")
-			os.Exit(1)
-		}
-		if userID == "" {
-			logger.Error("--user-id is required")
-			os.Exit(1)
-		}
 		if role == "" {
-			logger.Error("--role is required (team_manager, analyst_developer, developer, read_only)")
+			logger.Error("--role is required (%s)", strings.Join(strings.Fields(validation.TeamRoles), ", "))
+			os.Exit(1)
+		}
+		// The ids go into the member URL path and the role into the request
+		// body, where the API is the only thing that used to reject a typo.
+		if err := validation.Struct(validation.TeamMemberInput{
+			TeamID: teamID,
+			UserID: userID,
+			Role:   role,
+		}); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -238,16 +247,18 @@ var teamUpdateMemberCmd = &cobra.Command{
 		userID, _ := cmd.Flags().GetString("user-id")
 		role, _ := cmd.Flags().GetString("role")
 
-		if teamID == "" {
-			logger.Error("--team-id is required")
-			os.Exit(1)
-		}
-		if userID == "" {
-			logger.Error("--user-id is required")
-			os.Exit(1)
-		}
 		if role == "" {
-			logger.Error("--role is required (team_manager, analyst_developer, developer, read_only)")
+			logger.Error("--role is required (%s)", strings.Join(strings.Fields(validation.TeamRoles), ", "))
+			os.Exit(1)
+		}
+		// The ids go into the member URL path and the role into the request
+		// body, where the API is the only thing that used to reject a typo.
+		if err := validation.Struct(validation.TeamMemberInput{
+			TeamID: teamID,
+			UserID: userID,
+			Role:   role,
+		}); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
@@ -273,12 +284,12 @@ var teamRemoveMemberCmd = &cobra.Command{
 		teamID, _ := cmd.Flags().GetString("team-id")
 		userID, _ := cmd.Flags().GetString("user-id")
 
-		if teamID == "" {
-			logger.Error("--team-id is required")
+		if err := validation.ResourceID("--team-id", teamID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
-		if userID == "" {
-			logger.Error("--user-id is required")
+		if err := validation.ResourceID("--user-id", userID); err != nil {
+			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
