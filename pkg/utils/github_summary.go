@@ -302,7 +302,9 @@ func (w *GitHubSummaryWriter) AddFinalStatus(passed bool, message string) {
 	}
 	if message != "" {
 		w.AddLine("")
-		w.AddLine(message)
+		// The message carries API text: a stray %s in it must not be read as a
+		// verb against an empty argument list.
+		w.AddLine("%s", message)
 	}
 	w.AddLine("")
 }

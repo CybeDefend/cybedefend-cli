@@ -76,9 +76,23 @@ The output filename now defaults to the one the API suggests, which carries the 
 
 ---
 
+## Build
+
+### The project now builds on Go 1.26
+
+Input validation brought in `go-playground/validator`, which pulls `golang.org/x/crypto`. On Go 1.22 no patched version of it was reachable — every release that fixes the known advisories requires Go 1.25 or later — so the build moved forward rather than shipping a dependency that could not be updated.
+
+- `go.mod`, both CI workflows and the Docker base image are now on **Go 1.26**.
+- `golang.org/x/crypto` is on **v0.56.0**, clearing every open advisory against it.
+- `golang.org/x/net` is gone entirely: `mimetype` v1.4.15 no longer needs it.
+
+This only concerns you if you build from source — the precompiled binaries and the Docker image are unaffected. Go 1.26's stricter `vet` also surfaced a handful of non-constant format strings, now fixed; one of them meant a policy message containing a `%` could be mangled in the GitHub step summary.
+
+---
+
 ## Upgrade Notes
 
-Drop-in replacement: no configuration change, no migration, no re-login.
+Drop-in replacement: no configuration change, no migration, no re-login. Building from source now requires **Go 1.26**.
 
 Two behaviours change on purpose, and both can surface a failure that was previously silent:
 

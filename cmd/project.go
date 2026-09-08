@@ -32,7 +32,7 @@ var projectCreateCmd = &cobra.Command{
 
 		// The team id is interpolated into the create-project URL path.
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 		if name == "" {
@@ -117,7 +117,7 @@ func getProjectID(cmd *cobra.Command) string {
 	// it into an API URL path, so it is checked once here rather than in each
 	// of the report, compliance, container and overview commands.
 	if err := validation.ResourceID("--project-id", pid); err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err)
 		os.Exit(1)
 	}
 	return pid
@@ -127,7 +127,7 @@ func getProjectID(cmd *cobra.Command) string {
 // to interpolate into an API URL path.
 func requireID(flag, value string) {
 	if err := validation.ResourceID(flag, value); err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err)
 		os.Exit(1)
 	}
 }

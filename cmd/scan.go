@@ -52,20 +52,20 @@ var scanCmd = &cobra.Command{
 		}
 
 		if err := validateScanRequirements(projectIDScan); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
 		// Checked before the directory is zipped: an invalid severity gate used
 		// to surface only after the archive had been built and discarded.
 		if err := validateScanInputs(); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
 		zipPath, err := prepareZipFile()
 		if err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 

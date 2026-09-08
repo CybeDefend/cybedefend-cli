@@ -95,7 +95,7 @@ var complianceStatsCmd = &cobra.Command{
 // violations, so the caller passes whichever it read.
 func validateCompliancePage(page, pageSize int) {
 	if err := validation.Struct(validation.PageInput{Page: page, PageSize: pageSize}); err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err)
 		os.Exit(1)
 	}
 }
@@ -107,7 +107,7 @@ func validateComplianceDates(startDate, endDate string) {
 		StartDate: startDate,
 		EndDate:   endDate,
 	}); err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err)
 		os.Exit(1)
 	}
 }

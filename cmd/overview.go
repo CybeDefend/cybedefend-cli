@@ -31,7 +31,7 @@ var overviewProjectCmd = &cobra.Command{
 			ProjectID: projectID,
 			Branches:  branches,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -74,7 +74,7 @@ var overviewOrgCmd = &cobra.Command{
 			DateTo:          dateTo,
 			TrendPeriodDays: trendPeriodDays,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
