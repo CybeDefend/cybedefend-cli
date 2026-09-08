@@ -24,6 +24,7 @@ var (
 	allResults       bool
 	resultsBranch    string
 	groupedMode      bool
+	includeScores    bool // --scores: expose CVE + risk scores in the output
 )
 
 var resultsCmd = &cobra.Command{
@@ -42,6 +43,7 @@ func init() {
 	resultsCmd.Flags().StringVar(&outputPath, "filepath", ".", "Output file path")
 	resultsCmd.Flags().StringVarP(&resultsBranch, "branch", "b", "", "Branch to filter results (default: all branches)")
 	resultsCmd.Flags().BoolVarP(&groupedMode, "grouped", "g", false, "Return results grouped by rule/CVE")
+	resultsCmd.Flags().BoolVar(&includeScores, "scores", false, "Include CVE identifiers and risk scores (priority, CVSS 4.0, EPSS, exploitability) in the output")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,8 +100,33 @@ func isForbiddenError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "API error 403")
 }
 
+// fetchResultsPage fetches one flat page and applies the --scores flag: without
+// it, the CVE / severity / priority / scores fields are cleared so the output
+// keeps its historical shape.
+func fetchResultsPage(client *api.Client, scanType string, pg, limit int) (*api.ScanResults, error) {
+	res, err := client.GetResults(projectIDResults, scanType, pg, limit, resultsBranch)
+	if err != nil {
+		return nil, err
+	}
+	if !includeScores {
+		for i := range res.Vulnerabilities {
+			res.Vulnerabilities[i] = withoutRiskData(res.Vulnerabilities[i])
+		}
+	}
+	return res, nil
+}
+
+// withoutRiskData strips the fields that are only exposed with --scores.
+func withoutRiskData(v api.Vulnerability) api.Vulnerability {
+	v.CVE = ""
+	v.CurrentSeverity = ""
+	v.CurrentPriority = ""
+	v.Scores = nil
+	return v
+}
+
 func fetchOnePage(client *api.Client, scanType string, pg int) *api.ScanResults {
-	results, err := client.GetResults(projectIDResults, scanType, pg, 20, resultsBranch)
+	results, err := fetchResultsPage(client, scanType, pg, 20)
 	if err != nil {
 		if isForbiddenError(err) {
 			logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
@@ -114,7 +141,7 @@ func fetchOnePage(client *api.Client, scanType string, pg int) *api.ScanResults 
 	}
 	if pg > results.TotalPages {
 		logger.Warn("Requested page %d exceeds total pages (%d). Fetching last page instead.", pg, results.TotalPages)
-		results, err = client.GetResults(projectIDResults, scanType, results.TotalPages, 20, resultsBranch)
+		results, err = fetchResultsPage(client, scanType, results.TotalPages, 20)
 		if err != nil {
 			logger.Error("Error fetching last page: %v", err)
 			os.Exit(1)
@@ -128,7 +155,7 @@ func fetchAllPages(client *api.Client, scanType string) *api.ScanResults {
 	projectName := ""
 	for pg := 1; ; pg++ {
 		logger.Info("Fetching page %d...", pg)
-		res, err := client.GetResults(projectIDResults, scanType, pg, 100, resultsBranch)
+		res, err := fetchResultsPage(client, scanType, pg, 100)
 		if err != nil {
 			if isForbiddenError(err) {
 				logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
@@ -359,7 +386,7 @@ func fetchAllPagesForType(client *api.Client, scanType string) *api.ScanResults 
 		Vulnerabilities: []api.Vulnerability{},
 	}
 	for pg := 1; ; pg++ {
-		res, err := client.GetResults(projectIDResults, scanType, pg, 100, resultsBranch)
+		res, err := fetchResultsPage(client, scanType, pg, 100)
 		if err != nil {
 			if isForbiddenError(err) {
 				logger.Error("Access denied to project %s. Make sure you have access to this project.", projectIDResults)
@@ -551,7 +578,7 @@ func mapVulnerabilities(apiVulns []api.Vulnerability) []utils.Vulnerability {
 		if v.ID == "" && v.Details.Name == "" {
 			continue
 		}
-		out = append(out, utils.Vulnerability{
+		u := utils.Vulnerability{
 			ID:                  v.ID,
 			Name:                v.Details.Name,
 			Description:         strings.ReplaceAll(v.Details.Description, "**", ""),
@@ -563,7 +590,21 @@ func mapVulnerabilities(apiVulns []api.Vulnerability) []utils.Vulnerability {
 			HowToPrevent:        v.Details.HowToPrevent,
 			CWE:                 v.Details.CWE,
 			OWASP:               v.Details.OWASP,
-		})
+			CVE:                 v.CVE,
+			Priority:            v.CurrentPriority,
+		}
+		if s := v.Scores; s != nil {
+			u.PriorityScore = s.PriorityScore
+			u.Cvss4BaseScore = s.Cvss4BaseScore
+			u.Cvss4EnvironmentalScore = s.Cvss4EnvironmentalScore
+			u.Cvss4Vector = s.Cvss4Vector
+			u.Cvss4EnvironmentalVector = s.Cvss4EnvironmentalVector
+			u.Cvss4Breakdown = s.Cvss4Breakdown
+			u.EpssScore = s.EpssScore
+			u.EpssPercentile = s.EpssPercentile
+			u.ExploitabilityVerdict = s.ExploitabilityVerdict
+		}
+		out = append(out, u)
 	}
 	return out
 }

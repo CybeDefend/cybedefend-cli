@@ -34,6 +34,9 @@ type SarifResult struct {
 	Level     string          `json:"level"`
 	Message   SarifMessage    `json:"message"`
 	Locations []SarifLocation `json:"locations"`
+	// Properties carries the platform risk data (CVE, CVSS 4, EPSS, priority)
+	// as a standard SARIF property bag.
+	Properties map[string]any `json:"properties,omitempty"`
 }
 
 type SarifMessage struct {
@@ -144,9 +147,60 @@ func mapVulnerabilitiesToSarifResults(vulnerabilities []Vulnerability) []SarifRe
 					},
 				},
 			},
+			Properties: sarifProperties(v),
 		})
 	}
 	return results
+}
+
+// sarifProperties builds the property bag of one result, nil when no risk data
+// is available. "security-severity" follows the GitHub code-scanning convention
+// (decimal string), preferring the environmental score over the base score.
+func sarifProperties(v Vulnerability) map[string]any {
+	props := map[string]any{}
+	if v.CVE != "" {
+		props["cve"] = v.CVE
+	}
+	if v.Priority != "" {
+		props["priority"] = v.Priority
+	}
+	if v.PriorityScore != nil {
+		props["priorityScore"] = *v.PriorityScore
+	}
+	if v.Cvss4BaseScore != nil {
+		props["cvss4BaseScore"] = *v.Cvss4BaseScore
+	}
+	if v.Cvss4EnvironmentalScore != nil {
+		props["cvss4EnvironmentalScore"] = *v.Cvss4EnvironmentalScore
+	}
+	if v.Cvss4Vector != "" {
+		props["cvss4Vector"] = v.Cvss4Vector
+	}
+	if v.Cvss4EnvironmentalVector != "" {
+		props["cvss4EnvironmentalVector"] = v.Cvss4EnvironmentalVector
+	}
+	if v.Cvss4Breakdown != nil {
+		props["cvss4Breakdown"] = v.Cvss4Breakdown
+	}
+	if v.EpssScore != nil {
+		props["epssScore"] = *v.EpssScore
+	}
+	if v.EpssPercentile != nil {
+		props["epssPercentile"] = *v.EpssPercentile
+	}
+	if v.ExploitabilityVerdict != "" {
+		props["exploitabilityVerdict"] = v.ExploitabilityVerdict
+	}
+	switch {
+	case v.Cvss4EnvironmentalScore != nil:
+		props["security-severity"] = fmt.Sprintf("%.1f", *v.Cvss4EnvironmentalScore)
+	case v.Cvss4BaseScore != nil:
+		props["security-severity"] = fmt.Sprintf("%.1f", *v.Cvss4BaseScore)
+	}
+	if len(props) == 0 {
+		return nil
+	}
+	return props
 }
 
 // mapSeverityToLevel maps the severity to SARIF level.
