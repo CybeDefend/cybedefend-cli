@@ -205,7 +205,7 @@ var reportBatchCmd = &cobra.Command{
 // one the report URL, the request body and the output path can carry.
 func validateReportInput(input validation.ReportInput) {
 	if err := validation.Struct(input); err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err)
 		os.Exit(1)
 	}
 }

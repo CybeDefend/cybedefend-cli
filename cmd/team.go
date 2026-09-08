@@ -29,7 +29,7 @@ var teamCreateCmd = &cobra.Command{
 		desc, _ := cmd.Flags().GetString("description")
 
 		if err := validation.ResourceID("--organization-id", orgID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 		if name == "" {
@@ -64,7 +64,7 @@ var teamDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -88,11 +88,11 @@ var teamGetCmd = &cobra.Command{
 		teamID, _ := cmd.Flags().GetString("team-id")
 
 		if err := validation.ResourceID("--organization-id", orgID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -115,7 +115,7 @@ var teamListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		orgID, _ := cmd.Flags().GetString("organization-id")
 		if err := validation.ResourceID("--organization-id", orgID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -143,7 +143,7 @@ var teamUpdateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -175,7 +175,7 @@ var teamMembersCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		teamID, _ := cmd.Flags().GetString("team-id")
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -184,7 +184,7 @@ var teamMembersCmd = &cobra.Command{
 		search, _ := cmd.Flags().GetString("search")
 
 		if err := validation.Struct(validation.PageInput{Page: page, PageSize: pageSize}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -220,7 +220,7 @@ var teamAddMemberCmd = &cobra.Command{
 			UserID: userID,
 			Role:   role,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -258,7 +258,7 @@ var teamUpdateMemberCmd = &cobra.Command{
 			UserID: userID,
 			Role:   role,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 
@@ -285,11 +285,11 @@ var teamRemoveMemberCmd = &cobra.Command{
 		userID, _ := cmd.Flags().GetString("user-id")
 
 		if err := validation.ResourceID("--team-id", teamID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 		if err := validation.ResourceID("--user-id", userID); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err)
 			os.Exit(1)
 		}
 

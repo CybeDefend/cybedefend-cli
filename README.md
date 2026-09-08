@@ -1,7 +1,7 @@
 # CybeDefend CLI
 
 ![License](https://img.shields.io/badge/license-apache--2.0-blue)
-![Go Version](https://img.shields.io/badge/go-%3E%3D1.22-blue)
+![Go Version](https://img.shields.io/badge/go-%3E%3D1.26-blue)
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 
 The **CybeDefend CLI** is a command-line interface tool for interacting with the CybeDefend API. It allows you to perform security scans, retrieve scan results, and manage your projects with ease. Designed for simplicity and portability, this CLI supports multiple platforms and can be integrated into CI/CD pipelines.

@@ -74,7 +74,7 @@ func makeContainerScanCommand(cliName string, info registryInfo) *cobra.Command 
 				Branch:       branch,
 				Severities:   severities,
 			}); err != nil {
-				logger.Error(err.Error())
+				logger.Error("%s", err)
 				os.Exit(1)
 			}
 
