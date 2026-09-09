@@ -6,6 +6,7 @@ import (
 	"cybedefend-cli/pkg/utils"
 	"cybedefend-cli/pkg/validation"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,9 @@ var (
 	allResults       bool
 	resultsBranch    string
 	groupedMode      bool
-	includeScores    bool // --scores: expose CVE + risk scores in the output
+	includeScores    bool     // --scores: expose CVE + risk scores in the output
+	statusFilter     string   // --status: comma-separated states to include
+	resultStatuses   []string // parsed from statusFilter, validated
 )
 
 var resultsCmd = &cobra.Command{
@@ -45,6 +48,40 @@ func init() {
 	resultsCmd.Flags().StringVarP(&resultsBranch, "branch", "b", "", "Branch to filter results (default: all branches)")
 	resultsCmd.Flags().BoolVarP(&groupedMode, "grouped", "g", false, "Return results grouped by rule/CVE")
 	resultsCmd.Flags().BoolVar(&includeScores, "scores", false, "Include CVE identifiers and risk scores (priority, CVSS 4.0, EPSS, exploitability) in the output")
+	resultsCmd.Flags().StringVar(&statusFilter, "status", strings.Join(api.DefaultResultStatuses, ","), "Comma-separated vulnerability states to include ("+strings.Join(api.ValidResultStatuses, ", ")+")")
+}
+
+// parseStatusFilter turns the --status value into the list of states sent to
+// the API: trimmed, lower-cased, de-duplicated, validated against
+// api.ValidResultStatuses. An empty value means the default filter.
+func parseStatusFilter(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return api.DefaultResultStatuses, nil
+	}
+	valid := make(map[string]bool, len(api.ValidResultStatuses))
+	for _, s := range api.ValidResultStatuses {
+		valid[s] = true
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		state := strings.ToLower(strings.TrimSpace(part))
+		if state == "" {
+			continue
+		}
+		if !valid[state] {
+			return nil, fmt.Errorf("invalid status: %q (allowed: %s)", state, strings.Join(api.ValidResultStatuses, ", "))
+		}
+		if seen[state] {
+			continue
+		}
+		seen[state] = true
+		out = append(out, state)
+	}
+	if len(out) == 0 {
+		return api.DefaultResultStatuses, nil
+	}
+	return out, nil
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,7 +142,7 @@ func isForbiddenError(err error) bool {
 // it, the CVE / severity / priority / scores fields are cleared so the output
 // keeps its historical shape.
 func fetchResultsPage(client *api.Client, scanType string, pg, limit int) (*api.ScanResults, error) {
-	res, err := client.GetResults(projectIDResults, scanType, pg, limit, resultsBranch)
+	res, err := client.GetResults(projectIDResults, scanType, pg, limit, resultsBranch, resultStatuses)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +241,7 @@ func executeGroupedResults(client *api.Client) {
 	if allResults {
 		combined = fetchAllGroupedPages(client)
 	} else {
-		res, err := client.GetGroupedResults(projectIDResults, resultType, page, 50, resultsBranch)
+		res, err := client.GetGroupedResults(projectIDResults, resultType, page, 50, resultsBranch, resultStatuses)
 		if err != nil {
 			logger.Error("Error fetching grouped results: %v", err)
 			os.Exit(1)
@@ -221,7 +258,7 @@ func fetchAllGroupedPages(client *api.Client) *api.GroupedScanResults {
 	combined := &api.GroupedScanResults{}
 	for pg := 1; ; pg++ {
 		logger.Info("Fetching grouped page %d...", pg)
-		res, err := client.GetGroupedResults(projectIDResults, resultType, pg, 100, resultsBranch)
+		res, err := client.GetGroupedResults(projectIDResults, resultType, pg, 100, resultsBranch, resultStatuses)
 		if err != nil {
 			logger.Error("Error fetching grouped page %d: %v", pg, err)
 			os.Exit(1)
@@ -446,6 +483,13 @@ func validateInputs() {
 		logger.Error("%v", err)
 		os.Exit(1)
 	}
+
+	statuses, err := parseStatusFilter(statusFilter)
+	if err != nil {
+		logger.Error("%v", err)
+		os.Exit(1)
+	}
+	resultStatuses = statuses
 }
 
 func setOutputFileDefaults() {

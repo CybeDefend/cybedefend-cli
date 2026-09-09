@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -56,7 +57,7 @@ func TestGetResults_SastExposesScoresAndPriority(t *testing.T) {
 		}]
 	}`)
 
-	res, err := client.GetResults("p1", "sast", 1, 20, "")
+	res, err := client.GetResults("p1", "sast", 1, 20, "", nil)
 	if err != nil {
 		t.Fatalf("GetResults: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestGetResults_ScaResolvesCveFromMetadata(t *testing.T) {
 		]
 	}`)
 
-	res, err := client.GetResults("p1", "sca", 1, 20, "")
+	res, err := client.GetResults("p1", "sca", 1, 20, "", nil)
 	if err != nil {
 		t.Fatalf("GetResults: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestGetResults_ScoresOmittedWhenAbsent(t *testing.T) {
 		}]
 	}`)
 
-	res, err := client.GetResults("p1", "secret", 1, 20, "")
+	res, err := client.GetResults("p1", "secret", 1, 20, "", nil)
 	if err != nil {
 		t.Fatalf("GetResults: %v", err)
 	}
@@ -233,7 +234,7 @@ func TestGetResults_ContainerParsesFlatShape(t *testing.T) {
 		}]
 	}`)
 
-	res, err := client.GetResults("p1", "container", 1, 20, "")
+	res, err := client.GetResults("p1", "container", 1, 20, "", nil)
 	if err != nil {
 		t.Fatalf("GetResults: %v", err)
 	}
@@ -279,4 +280,113 @@ func TestGetResults_ContainerParsesFlatShape(t *testing.T) {
 	if s.PriorityScore == nil || *s.PriorityScore != 88.4 {
 		t.Errorf("PriorityScore = %v, want 88.4", s.PriorityScore)
 	}
+}
+
+// newQueryCapturingClient returns a Client whose server records the query of
+// the last non-token request and answers it with an empty results page.
+func newQueryCapturingClient(t *testing.T) (*Client, *url.Values) {
+	t.Helper()
+	captured := &url.Values{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/oidc/token" {
+			_, _ = w.Write([]byte(`{"access_token":"tok","expires_in":600}`))
+			return
+		}
+		*captured = r.URL.Query()
+		_, _ = w.Write([]byte(`{"projectId":"p1","projectName":"proj","page":1,"total":0,"totalPages":0,"vulnerabilities":[],"groupedVulnerabilities":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+	return NewClient(srv.URL, "test-pat", srv.URL, "client-id", srv.URL), captured
+}
+
+// The gateway's query parser keeps `status[]` verbatim as a key named
+// "status[]", so a bracketed array never reaches the `status` filter and the
+// API answers with every state (ignored, resolved...). Filters must use the
+// repeated-key form the gateway actually reads.
+func TestGetResults_SendsRepeatedFilterParams(t *testing.T) {
+	client, q := newQueryCapturingClient(t)
+	if _, err := client.GetResults("p1", "sast", 1, 20, "", nil); err != nil {
+		t.Fatalf("GetResults: %v", err)
+	}
+	for _, bracketed := range []string{"status[]", "severity[]", "priority[]"} {
+		if _, ok := (*q)[bracketed]; ok {
+			t.Errorf("query must not carry the bracketed key %q: %v", bracketed, *q)
+		}
+	}
+	if got := (*q)["status"]; !equalStrings(got, DefaultResultStatuses) {
+		t.Errorf("status = %v, want %v", got, DefaultResultStatuses)
+	}
+	// No severity / priority restriction: the API only accepts the four rated
+	// levels as filter values, so sending them all would silently drop the
+	// findings without a rating (SCA advisories without a CVSS score).
+	for _, key := range []string{"severity", "priority"} {
+		if _, ok := (*q)[key]; ok {
+			t.Errorf("query must not restrict %q: %v", key, *q)
+		}
+	}
+}
+
+func TestGetResults_HonoursRequestedStatuses(t *testing.T) {
+	client, q := newQueryCapturingClient(t)
+	if _, err := client.GetResults("p1", "sca", 1, 20, "", []string{"ignored", "resolved"}); err != nil {
+		t.Fatalf("GetResults: %v", err)
+	}
+	if got := (*q)["status"]; !equalStrings(got, []string{"ignored", "resolved"}) {
+		t.Errorf("status = %v, want [ignored resolved]", got)
+	}
+}
+
+func TestGetGroupedResults_SendsRepeatedFilterParams(t *testing.T) {
+	client, q := newQueryCapturingClient(t)
+	if _, err := client.GetGroupedResults("p1", "sast", 1, 50, "", nil); err != nil {
+		t.Fatalf("GetGroupedResults: %v", err)
+	}
+	for _, bracketed := range []string{"statusFilter[]", "severityFilter[]", "priorityFilter[]"} {
+		if _, ok := (*q)[bracketed]; ok {
+			t.Errorf("query must not carry the bracketed key %q: %v", bracketed, *q)
+		}
+	}
+	if got := (*q)["statusFilter"]; !equalStrings(got, DefaultResultStatuses) {
+		t.Errorf("statusFilter = %v, want %v", got, DefaultResultStatuses)
+	}
+	for _, key := range []string{"severityFilter", "priorityFilter"} {
+		if _, ok := (*q)[key]; ok {
+			t.Errorf("query must not restrict %q: %v", key, *q)
+		}
+	}
+}
+
+func TestGetGroupedResults_HonoursRequestedStatuses(t *testing.T) {
+	client, q := newQueryCapturingClient(t)
+	if _, err := client.GetGroupedResults("p1", "iac", 1, 50, "", []string{"ignored"}); err != nil {
+		t.Fatalf("GetGroupedResults: %v", err)
+	}
+	if got := (*q)["statusFilter"]; !equalStrings(got, []string{"ignored"}) {
+		t.Errorf("statusFilter = %v, want [ignored]", got)
+	}
+}
+
+// The flat output must let consumers see the state of each finding, so a
+// custom --status export (e.g. ignored) is self-describing.
+func TestVulnerability_SerialisesCurrentState(t *testing.T) {
+	raw, err := json.Marshal(Vulnerability{ID: "v1", CurrentState: "ignored"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"currentState":"ignored"`) {
+		t.Errorf("currentState missing from JSON: %s", raw)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

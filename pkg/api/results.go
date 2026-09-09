@@ -15,6 +15,37 @@ import (
 // ValidScanTypes lists all accepted scan type values.
 var ValidScanTypes = []string{"sast", "sca", "iac", "secret", "cicd", "container", "all"}
 
+// ValidResultStatuses lists the vulnerability states the results endpoints
+// accept as a filter.
+var ValidResultStatuses = []string{"to_verify", "confirmed", "resolved", "ignored"}
+
+// DefaultResultStatuses is the filter applied when the caller does not ask for
+// specific states: only the findings that still need attention.
+var DefaultResultStatuses = []string{"to_verify", "confirmed"}
+
+// statusesOrDefault returns the requested states, or the default filter when
+// none were requested.
+func statusesOrDefault(statuses []string) []string {
+	if len(statuses) == 0 {
+		return DefaultResultStatuses
+	}
+	return statuses
+}
+
+// addRepeated appends one `key=value` pair per value. The gateway reads array
+// filters in this repeated-key form only: the bracketed `key[]=value` spelling
+// is kept verbatim as a key literally named "key[]", which silently disables
+// the filter and makes the API answer with every state.
+//
+// Only the status filter is sent. Severity and priority are deliberately left
+// unrestricted: the API accepts just the rated levels as filter values, so
+// listing them all would drop the findings that carry no rating.
+func addRepeated(q url.Values, key string, values []string) {
+	for _, v := range values {
+		q.Add(key, v)
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Flat results (all individual scan types)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,10 +73,10 @@ type Vulnerability struct {
 	CVE                 string               `json:"cve,omitempty"`
 	CurrentSeverity     string               `json:"currentSeverity,omitempty"`
 	CurrentPriority     string               `json:"currentPriority,omitempty"`
-	// CurrentState is decoded but never serialised: the severity gate needs it
-	// to drop resolved findings, while the `results` output keeps the shape
-	// downstream consumers already parse.
-	CurrentState string               `json:"-"`
+	// CurrentState is the triage state of the finding (to_verify, confirmed,
+	// resolved, ignored). It is always exported so a `--status` export is
+	// self-describing, and the severity gate reads it to drop resolved findings.
+	CurrentState string               `json:"currentState,omitempty"`
 	Scores       *VulnerabilityScores `json:"scores,omitempty"`
 }
 
@@ -369,21 +400,14 @@ type VulnCounts struct {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // GetResults fetches one page of flat results for the given scan type and optional branch.
-func (c *Client) GetResults(projectID, scanType string, page, limit int, branch string) (*ScanResults, error) {
+// An empty statuses slice applies DefaultResultStatuses.
+func (c *Client) GetResults(projectID, scanType string, page, limit int, branch string, statuses []string) (*ScanResults, error) {
 	q := url.Values{}
 	q.Set("pageNumber", strconv.Itoa(page))
 	q.Set("sort", "currentSeverity")
 	q.Set("order", "asc")
 	q.Set("pageSizeNumber", strconv.Itoa(limit))
-	for _, s := range []string{"critical", "high", "medium", "low"} {
-		q.Add("severity[]", s)
-	}
-	for _, s := range []string{"to_verify", "confirmed"} {
-		q.Add("status[]", s)
-	}
-	for _, s := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
-		q.Add("priority[]", s)
-	}
+	addRepeated(q, "status", statusesOrDefault(statuses))
 	if branch != "" {
 		q.Set("branch", branch)
 	}
@@ -534,21 +558,14 @@ func parseContainerResults(raw []byte) (*ScanResults, error) {
 
 // GetGroupedResults fetches one page of grouped results for the given scan type.
 // Supported scan types: sast, iac, sca, secret, cicd.
-func (c *Client) GetGroupedResults(projectID, scanType string, page, perPage int, branch string) (*GroupedScanResults, error) {
+// An empty statuses slice applies DefaultResultStatuses.
+func (c *Client) GetGroupedResults(projectID, scanType string, page, perPage int, branch string, statuses []string) (*GroupedScanResults, error) {
 	q := url.Values{}
 	q.Set("page", strconv.Itoa(page))
 	q.Set("perPage", strconv.Itoa(perPage))
 	q.Set("sort", "occurrenceCount")
 	q.Set("order", "DESC")
-	for _, s := range []string{"critical", "high", "medium", "low"} {
-		q.Add("severityFilter[]", s)
-	}
-	for _, s := range []string{"to_verify", "confirmed"} {
-		q.Add("statusFilter[]", s)
-	}
-	for _, s := range []string{"critical_urgent", "urgent", "normal", "low", "very_low"} {
-		q.Add("priorityFilter[]", s)
-	}
+	addRepeated(q, "statusFilter", statusesOrDefault(statuses))
 	if branch != "" {
 		q.Set("branch", branch)
 	}

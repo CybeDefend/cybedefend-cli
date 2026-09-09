@@ -339,6 +339,7 @@ By default, the command fetches all scan types (`--type all`) in `json` format a
 - `--page, -p`: Page number to fetch (default: `1`). Ignored if `--all` is set.
 - `--all, -a`: Fetch all results across all pages (default: `true`).
 - `--branch, -b`: Filter results by branch (default: all branches).
+- `--status`: Comma-separated vulnerability states to include. Options: `to_verify`, `confirmed`, `resolved`, `ignored` (default: `to_verify,confirmed`, i.e. only the findings that still need attention). Every exported finding carries its state in `currentState`.
 - `--grouped, -g`: Return results grouped by rule/CVE (JSON output only).
 - `--scores`: Include CVE identifiers and risk scores (priority, CVSS 4.0, EPSS, exploitability) in the output. Off by default so the output keeps its historical shape.
 - `--output, -o`: Format of the output file. Options:
@@ -392,7 +393,12 @@ cybedefend results --project-id your-project-id --type sca --scores --output mar
    cybedefend results --project-id your-project-id --type iac
    ```
 
-5. Use CI/CD-friendly mode:
+5. Export the ignored and resolved findings only (each finding carries its `currentState`):
+   ```bash
+   cybedefend results --project-id your-project-id --type sca --status ignored,resolved
+   ```
+
+6. Use CI/CD-friendly mode:
    ```bash
    cybedefend results --project-id your-project-id --ci
    ```
@@ -458,12 +464,12 @@ On success, the command prints a JSON response containing the started scan's ID 
    cybedefend container scan gcr --image my-app:v1.0.0 --credential-id your-credential-id --severities CRITICAL,HIGH
    ```
 
-5. Scan an image from GitLab Container Registry with private results:
+7. Scan an image from GitLab Container Registry with private results:
    ```bash
    cybedefend container scan gitlab --image my-app:v1.0.0 --credential-id your-credential-id --private
    ```
 
-6. Use the EU region (the registry and project must belong to that region):
+8. Use the EU region (the registry and project must belong to that region):
    ```bash
    cybedefend container scan quay --image my-org/my-app:v1.0.0 --credential-id your-credential-id --region eu
    ```
