@@ -2,8 +2,6 @@
 name: Code Scanning
 on:
   push: { branches: [main] }
-  pull_request:
-  schedule: [{ cron: '7 3 * * 1' }]
 
 permissions:
   contents: read
