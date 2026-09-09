@@ -1,0 +1,13 @@
+# Docker copies what is on disk, not what git tracks: .gitignore does not
+# protect a build context. private-key.asc — the GPG signing key — is gitignored
+# and absent from CI checkouts, but it sits in the working directory of anyone
+# who signs a release, and `COPY . .` would bake it into their local image.
+#
+# The Go sources are deliberately NOT excluded: the image compiles from them.
+.git
+.github
+.claude
+dist
+*.asc
+config.yml
+.DS_Store
