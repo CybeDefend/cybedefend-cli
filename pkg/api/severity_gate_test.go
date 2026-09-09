@@ -214,9 +214,9 @@ func TestCountVulnerabilitiesBySeverity_ForbiddenTypeIsSkipped(t *testing.T) {
 	}
 }
 
-// The severity gate reads CurrentState, which is deliberately not serialised —
-// the `results` command's output shape is what downstream consumers parse.
-func TestVulnerability_CurrentStateIsNotSerialised(t *testing.T) {
+// The severity gate reads CurrentState, and the `results` output exports it so
+// consumers can tell which triage state each finding is in (DEV-67).
+func TestVulnerability_CurrentStateIsDecodedAndSerialised(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oidc/token" {
 			fmt.Fprint(w, `{"access_token":"tok","expires_in":600}`)
@@ -228,7 +228,7 @@ func TestVulnerability_CurrentStateIsNotSerialised(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := NewClient(srv.URL, "pat", srv.URL, "cid", srv.URL)
-	results, err := client.GetResults("p1", "sast", 1, 20, "")
+	results, err := client.GetResults("p1", "sast", 1, 20, "", nil)
 	if err != nil {
 		t.Fatalf("GetResults returned %v", err)
 	}
@@ -241,7 +241,7 @@ func TestVulnerability_CurrentStateIsNotSerialised(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshalling returned %v", err)
 	}
-	if strings.Contains(string(encoded), "currentState") {
-		t.Errorf("currentState must stay out of the results output, got %s", encoded)
+	if !strings.Contains(string(encoded), `"currentState":"to_verify"`) {
+		t.Errorf("currentState must be part of the results output, got %s", encoded)
 	}
 }

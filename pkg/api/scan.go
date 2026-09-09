@@ -322,7 +322,7 @@ const (
 
 func (c *Client) countScanType(projectID, scanType, branch string, wanted map[string]bool, counts map[string]int) error {
 	for page := 1; page <= severityCountMaxPages; page++ {
-		results, err := c.GetResults(projectID, scanType, page, severityCountPageSize, branch)
+		results, err := c.GetResults(projectID, scanType, page, severityCountPageSize, branch, nil)
 		if err != nil {
 			// A scan type the plan does not cover answers 403. That is not a
 			// reason to abandon the gate for the types it does cover.
