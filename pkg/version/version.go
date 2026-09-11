@@ -7,4 +7,4 @@
 package version
 
 // Version is the CLI version. Bump this on release; nothing else carries it.
-const Version = "2.1.0"
+const Version = "2.1.1"
