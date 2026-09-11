@@ -15,8 +15,49 @@ type ProjectOverview struct {
 	TotalByState            []StateCount                 `json:"totalByState"`
 	TotalByAnalysisType     []AnalysisTypeCount          `json:"totalByAnalysisType"`
 	VulnerabilitiesOverTime []VulnerabilityOverTimeEntry `json:"vulnerabilitiesOverTime"`
-	RiskScore               float64                      `json:"riskScore"`
-	RiskLevel               string                       `json:"riskLevel"`
+
+	// The API reports risk under a "cyberRisk" object. Pointers keep "not
+	// computed" distinct from a genuine zero, so an overview without a score
+	// omits the field instead of claiming the project scored 0.
+	RiskScore *float64 `json:"riskScore,omitempty"`
+	RiskLevel string   `json:"riskLevel,omitempty"`
+}
+
+// cyberRisk is the risk block the API nests inside an overview response.
+type cyberRisk struct {
+	Score *float64 `json:"score"`
+	Level string   `json:"level"`
+}
+
+// UnmarshalJSON reads the risk score from "cyberRisk", falling back to the flat
+// riskScore/riskLevel pair. Decoding only the flat pair left every overview
+// reporting a score of 0 and an empty level, because the API has never sent it.
+func (p *ProjectOverview) UnmarshalJSON(data []byte) error {
+	type alias ProjectOverview
+	aux := struct {
+		*alias
+		CyberRisk *cyberRisk `json:"cyberRisk"`
+	}{alias: (*alias)(p)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	applyCyberRisk(aux.CyberRisk, &p.RiskScore, &p.RiskLevel)
+	return nil
+}
+
+// applyCyberRisk copies a nested risk block over the flat fields, leaving any
+// value that the flat shape already supplied untouched.
+func applyCyberRisk(cr *cyberRisk, score **float64, level *string) {
+	if cr == nil {
+		return
+	}
+	if cr.Score != nil {
+		*score = cr.Score
+	}
+	if cr.Level != "" {
+		*level = cr.Level
+	}
 }
 
 // SeverityCount is a severity + count pair.
@@ -50,12 +91,29 @@ type OrgOverview struct {
 	TotalByState            json.RawMessage `json:"totalByState"`
 	TotalByAnalysisType     json.RawMessage `json:"totalByAnalysisType"`
 	VulnerabilitiesOverTime json.RawMessage `json:"vulnerabilitiesOverTime"`
-	RiskScore               float64         `json:"riskScore"`
-	RiskLevel               string          `json:"riskLevel"`
+	RiskScore               *float64        `json:"riskScore,omitempty"`
+	RiskLevel               string          `json:"riskLevel,omitempty"`
 	TotalProjects           int             `json:"totalProjects,omitempty"`
 	TotalScans              int             `json:"totalScans,omitempty"`
 	ProjectSummaries        json.RawMessage `json:"projectSummaries,omitempty"`
 	TrendData               json.RawMessage `json:"trendData,omitempty"`
+}
+
+// UnmarshalJSON mirrors ProjectOverview: prefer the nested "cyberRisk" block.
+// The organization endpoint currently sends no risk figure at all, so without
+// the omitempty pointer the CLI printed a fabricated score of 0.
+func (o *OrgOverview) UnmarshalJSON(data []byte) error {
+	type alias OrgOverview
+	aux := struct {
+		*alias
+		CyberRisk *cyberRisk `json:"cyberRisk"`
+	}{alias: (*alias)(o)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	applyCyberRisk(aux.CyberRisk, &o.RiskScore, &o.RiskLevel)
+	return nil
 }
 
 // GetProjectOverview retrieves the results overview for a project.
