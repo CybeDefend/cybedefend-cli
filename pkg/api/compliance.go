@@ -180,6 +180,20 @@ func (c *Client) GetViolationStats(projectID string, startDate, endDate string) 
 		return nil, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
+	// The API wraps the payload in a "stats" envelope. Decoding straight into
+	// ViolationStatsResponse silently yielded zero counts and an empty status,
+	// so a project blocked by a policy reported as having no violations at all.
+	var envelope struct {
+		Stats *ViolationStatsResponse `json:"stats"`
+	}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
+		return nil, fmt.Errorf("error parsing response: %w", err)
+	}
+	if envelope.Stats != nil {
+		return envelope.Stats, nil
+	}
+
+	// Fall back to the flat shape so an API that drops the envelope keeps working.
 	var result ViolationStatsResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("error parsing response: %w", err)
