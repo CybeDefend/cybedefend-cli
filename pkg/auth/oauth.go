@@ -219,7 +219,7 @@ func RunOAuthFlow(authEndpoint, clientID, apiResource string) (*OAuthResult, err
 			desc := q.Get("error_description")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, callbackPageBase, callbackErrorBody("Authorization denied", errParam+": "+desc))
+			fmt.Fprintf(w, callbackPageBase, callbackErrorBody("Authorization denied", "The authorization server returned an error. See the terminal output for details."))
 			resultCh <- callbackResult{err: fmt.Errorf("authorization error: %s — %s", errParam, desc)}
 			return
 		}
