@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"cybedefend-cli/pkg/version"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -100,5 +102,53 @@ func TestConvertToSARIF_MapsEachVulnerabilityToAResult(t *testing.T) {
 	second := results[1].(map[string]any)
 	if got := second["ruleId"]; got != "id-2" {
 		t.Errorf("ruleId = %v, want the instance ID fallback", got)
+	}
+}
+
+// The driver block is the report's provenance: GitHub code scanning shows the
+// tool's informationUri and keys on its version. Through v2.1.0 the exporter
+// shipped a placeholder URI and a version frozen at 1.0.0.
+func TestConvertToSARIF_DriverCarriesRealToolMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "results.sarif")
+
+	if err := ConvertToSARIF(VulnerabilityReport{}, path); err != nil {
+		t.Fatalf("ConvertToSARIF returned %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the generated report: %v", err)
+	}
+
+	var report struct {
+		Runs []struct {
+			Tool struct {
+				Driver struct {
+					Name           string `json:"name"`
+					InformationURI string `json:"informationUri"`
+					Version        string `json:"version"`
+				} `json:"driver"`
+			} `json:"tool"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatalf("decoding the generated report: %v", err)
+	}
+	if len(report.Runs) != 1 {
+		t.Fatalf("expected exactly one run, got %d", len(report.Runs))
+	}
+
+	driver := report.Runs[0].Tool.Driver
+	if driver.Version != version.Version {
+		t.Errorf("driver.version = %q, want the CLI version %q", driver.Version, version.Version)
+	}
+	if strings.Contains(driver.InformationURI, "example.com") {
+		t.Errorf("driver.informationUri = %q, which is still the placeholder", driver.InformationURI)
+	}
+	if !strings.HasPrefix(driver.InformationURI, "https://") {
+		t.Errorf("driver.informationUri = %q, want an absolute https URL", driver.InformationURI)
+	}
+	if driver.Name == "" {
+		t.Error("driver.name is empty")
 	}
 }

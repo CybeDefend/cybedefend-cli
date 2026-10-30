@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"cybedefend-cli/pkg/version"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -76,9 +77,14 @@ func ConvertToSARIF(report VulnerabilityReport, outputFilePath string) error {
 			{
 				Tool: SarifTool{
 					Driver: SarifDriver{
-						Name:           "Cybedefend CLI",
-						InformationURI: "https://example.com/docs",
-						Version:        "1.0.0",
+						Name: "Cybedefend CLI",
+						// Consumers surface informationUri as the tool's home and
+						// use version for provenance, so both have to be real: the
+						// placeholder URI and the frozen "1.0.0" shipped through
+						// v2.1.0 told GitHub code scanning the wrong tool built the
+						// report.
+						InformationURI: "https://github.com/CybeDefend/cybedefend-cli",
+						Version:        version.Version,
 					},
 				},
 				Results: mapVulnerabilitiesToSarifResults(report.Vulnerabilities),
