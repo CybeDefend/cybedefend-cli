@@ -2,6 +2,12 @@ module cybedefend-cli
 
 go 1.26.0
 
+// CVE-2026-98432 (Linux kernel, IPv4 TCP use-after-free): its published exploit
+// needs an MPTCP listener, and Go opens listeners as MPTCP by default since 1.24.
+// The OAuth callback of `cybedefend login` listens on every interface. Keep this
+// until patched kernels are everywhere (Go Security Team advisory, 2026-10-29).
+godebug multipathtcp=0
+
 require (
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/mattn/go-colorable v0.1.13
